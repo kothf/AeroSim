@@ -29,7 +29,7 @@ npm run build    # static bundle in dist/
 | 3. Dynamics | FR-3.1 4×4 longitudinal A matrix (FRS layout), elevator B vector | `model.ts` `stateSpace` |
 | | FR-3.2 eigenvalues (Faddeev–LeVerrier + Durand–Kerner), s-plane with CG root locus | `linalg.ts`, `ui/SPlane.tsx` |
 | | FR-3.3 short-period / phugoid isolation, ωn, ζ, period, t½ / t₂ₓ, plus classical approximations | `modes.ts` |
-| | FR-3.4 Pulse elevator: RK4 time histories of Δα, Δq, Δu, Δh | `simulate.ts` |
+| | FR-3.4 Pulse elevator: exact (matrix-exponential) time histories of Δα, Δq, Δu, Δh | `simulate.ts` |
 | 4. Maneuvering | FR-4.1 dδe/dn and stick-fixed maneuver point X_mp | `model.ts` `maneuver` |
 | | FR-4.2 hinge moments C_h0, C_hα, C_hδ → stick force per g, handling band, force at limit n | `model.ts` `maneuver` |
 | Powerplant | thrust/power required vs available, throttle, V_max, excess-power climb, thrust-line moment in trim, dT/du in X_u and M_u | `propulsion.ts` |
@@ -42,17 +42,18 @@ npm run build    # static bundle in dist/
 - CG, NP and MP are fractions of MAC aft of the MAC leading edge. The wing is constant-chord, so the MAC sits at mid semi-span.
 - Stability axes, small disturbances, Z_ẇ and Z_q neglected (Nelson, *Flight Stability and Automatic Control*). C_mq includes a 10% fuselage allowance.
 - Thin airfoil section slope is 2π. Note the FRS prints C_m0,c/4 = (π/2)(A₂ − A₁); the correct Glauert result, used here, is **(π/4)(A₂ − A₁)** (it reproduces NACA 2412 c_m,c/4 = −0.053).
-- Propeller: constant shaft power with Gagg–Ferrar lapse; jet: constant thrust, σ^0.7 lapse. Propeller normal-force (fin) effect on C_mα is not modelled.
-- Stick force per g assumes the 1 g force is trimmed out with a tab. Handling band: 13–125 N/g; limit force 267 N (60 lbf, CS/FAR 23.143 wheel, two hands).
+- Propeller: constant shaft power with Gagg–Ferrar lapse, capped at the momentum-theory static thrust (Raymer statistical diameter, figure of merit 0.7); jet: constant thrust, σ^0.7 lapse. Propeller normal-force (fin) effect on C_mα is not modelled.
+- Stick force per g assumes the 1 g force is trimmed out with a tab. Handling band: 13–125 N/g; limit force 267 N (60 lbf, 14 CFR 23.143(c), centre stick).
 
 ## Verification
 
-`npm test` runs 72 tests, including:
+`npm test` runs 108 tests, including:
 
 - thin airfoil results against closed-form integrals for 4-digit sections, and NACA 2412 textbook values;
 - characteristic polynomial and roots of Nelson's Navion longitudinal matrix (short period −2.49 ± 2.60i, phugoid −0.017 ± 0.213i);
 - NP is where C_mα = 0; dδe/dn = 0 at the maneuver point; trim satisfies C_m = 0 and C_L = W/(qS);
-- phugoid period measured from the RK4 time history equals 2π/ω_d;
+- phugoid period measured from the time history equals 2π/ω_d;
 - constant-power vs constant-thrust X_u, engine-move CG/I_yy bookkeeping;
 - MAT-file layout (also checked with `scipy.io.loadmat`);
-- analysis + eigenvalues + 120 s RK4 integration under 30 ms.
+- validation against published data (ISA 1976 tables, Abbott & von Doenhoff, Anderson, DATCOM, Nelson's Navion derivatives and roots, Etkin maneuver point); see [docs/physics-validation.md](docs/physics-validation.md);
+- analysis + eigenvalues + 120 s time-history integration under 30 ms.

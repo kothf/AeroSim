@@ -148,7 +148,7 @@ const SECTIONS: Section[] = [
         <p>The four eigenvalues of A are split into the <b>short period</b> (higher frequency pair) and the <b>phugoid</b> (lower frequency pair). If the CG goes far aft, the short period splits into two real roots and one of them becomes positive (divergence).</p>
         <ul>
           <li><b>s-Plane</b>: × = current poles, dots = the poles as the CG is swept across the MAC (red when the CG is aft of NP). Click a dot to set the CG. Use “Phugoid zoom” to see the small phugoid pair.</li>
-          <li><b>Time history</b>: response to an elevator pulse, integrated with RK4 for 120 s. Left: Δα and Δq (short period, first 15 s). Right: Δu and Δh (phugoid). Set the pulse size and duration with the sliders under the plots.</li>
+          <li><b>Time history</b>: response to an elevator pulse, propagated for 120 s with the exact matrix-exponential (zero-order-hold) solution of the linear model. Left: Δα and Δq (short period, first 15 s). Right: Δu and Δh (phugoid). Set the pulse size and duration with the sliders under the plots.</li>
         </ul>
         <p>Characteristics: ω_n = |λ|, ζ = −Re λ / ω_n, T = 2π / Im λ, t½ = ln 2 / |Re λ|. The hints in the workspace also show the classical approximations: short period ω_n² ≈ Z_w M_q − M_w u₀ and the Lanchester phugoid ω_n ≈ √2 · g/u₀ (from −Z_u g/u₀).</p>
       </>
@@ -162,7 +162,7 @@ const SECTIONS: Section[] = [
         <p>Steady symmetric pull-up at load factor n. The extra lift and the pitch rate q = (n − 1)g/u₀ give, per g:</p>
         <F>dδe/dn = −(C_mα C_W + C_Lα C_mq ĝ) / (C_Lα C_mδe − C_Lδe C_mα),   ĝ = g c̄ / (2u₀²)</F>
         <p>Hinge moment C_h = C_h0 + C_hα α_t + C_hδ δe. Stick force F_s = G · η · q · S_e · c_e · C_h (positive = pull), where G is the stick gearing. The stick force per g follows from dC_h/dn.</p>
-        <p>Handling indicators: 13–125 N/g (≈ 3–28 lbf/g) acceptable band, and the force needed to reach the limit load factor compared with 267 N (60 lbf, CS/FAR 23.143, wheel, two hands). The 1 g force is assumed trimmed out with a tab.</p>
+        <p>Handling indicators: 13–125 N/g (≈ 3–28 lbf/g) acceptable band, and the force needed to reach the limit load factor compared with 267 N (60 lbf, 14 CFR 23.143(c), centre stick, temporary). The 1 g force is assumed trimmed out with a tab.</p>
       </>
     ),
   },

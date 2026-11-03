@@ -32,8 +32,34 @@ export interface Propulsion {
 export function thrustAvailableAt(inp: AircraftInputs, sigma: number, V: number): number {
   if (inp.engineType === 'jet') return inp.maxThrustKn * 1000 * Math.pow(sigma, 0.7);
   const P = inp.maxPowerKw * 1000 * Math.max(1.132 * sigma - 0.132, 0);
-  // cap at a static-thrust estimate to avoid the 1/V singularity near zero speed
-  return Math.min((inp.propEfficiency * P) / Math.max(V, 1), (P / 1000) * 12);
+  // T = eta_p P / V is singular at V -> 0, so it is capped by the momentum-theory static thrust.
+  return Math.min((inp.propEfficiency * P) / Math.max(V, 1), staticThrust(inp, sigma));
+}
+
+/** Propeller figure of merit used for the static-thrust cap (McCormick: about 0.7-0.8 for good propellers; the low end is used). */
+export const PROP_FIGURE_OF_MERIT = 0.7;
+
+/**
+ * Statistical propeller diameter, Raymer (Aircraft Design: A Conceptual Approach, propeller sizing):
+ * D = K_p P^(1/4) with K_p = 0.52 m/kW^0.25 (three-blade). P is the power of one engine.
+ */
+export function propDiameter(inp: AircraftInputs): number {
+  return 0.52 * Math.pow(inp.maxPowerKw / Math.max(inp.engineCount, 1), 0.25);
+}
+
+/**
+ * Static thrust from actuator-disk momentum theory (McCormick, Aerodynamics, Aeronautics and Flight
+ * Mechanics): FM * P = T^(3/2) / sqrt(2 rho A)  ->  T = (FM P)^(2/3) (2 rho A)^(1/3), summed over engines.
+ * Replaces an earlier fixed 12 N/kW cap, which was about half of typical light-aircraft static thrust
+ * (~20-25 N/kW) and clipped full-throttle thrust below ~130 kt.
+ */
+export function staticThrust(inp: AircraftInputs, sigma: number): number {
+  const n = Math.max(inp.engineCount, 1);
+  const P = (inp.maxPowerKw * 1000 * Math.max(1.132 * sigma - 0.132, 0)) / n;
+  const D = propDiameter(inp);
+  const A = (Math.PI * D * D) / 4;
+  const rho = 1.225 * sigma;
+  return n * Math.pow(PROP_FIGURE_OF_MERIT * P, 2 / 3) * Math.cbrt(2 * rho * A);
 }
 
 export function dragAt(inp: AircraftInputs, rho: number, V: number, n = 1): number {
