@@ -43,6 +43,8 @@ export const PARAM_INFO: Record<NumericKey, ParamInfo> = {
   altitudeFt: { label: 'Altitude h', unit: 'ft', hint: 'Pressure altitude (ISA). Sets density, Mach number and engine lapse.', slider: [0, 25000, 100] },
   flightPathDeg: { label: 'Flight path γ₀', unit: '°', hint: 'Reference climb angle (θ₀ in stability axes). Enters the gravity terms of the A matrix and the thrust required.', slider: [-10, 15, 0.5] },
   limitLoadFactor: { label: 'Limit load factor n', unit: 'g', hint: 'Design limit load factor used for the maneuver charts and the force-at-limit check (3.8 g normal category).', slider: [2, 9, 0.1] },
-  fuselageLength: { label: 'Fuselage length', unit: 'm', hint: 'Overall fuselage length; used for the schematic and installation limits.', slider: [4, 20, 0.1] },
+  fuselageLength: { label: 'Fuselage length', unit: 'm', hint: 'Fuselage length from the nose to the tail cone. The overall aircraft length is the larger of this and the tail trailing edge station. Limits where the wing and engine can be installed.', slider: [4, 20, 0.1] },
+  fuselageDiameter: { label: 'Fuselage diameter', unit: 'm', hint: 'Maximum fuselage width/height. Drawn in the schematic; a wide body moves the wing-body aerodynamic centre forward (set the body Δx_ac to match).', slider: [0.6, 4, 0.05] },
+  taperRatio: { label: 'Taper ratio λ', hint: 'λ = tip chord / root chord. Root chord c_r = 2S/(b(1+λ)); MAC c̄ = (2/3)c_r(1+λ+λ²)/(1+λ), located at y = (b/6)(1+2λ)/(1+λ). λ = 1 is a rectangular wing; 0.4–0.5 gives near-elliptic loading.', slider: [0.2, 1, 0.01] },
   engineCount: { label: 'Engines', hint: '1 = centreline engine, 2 = wing-mounted pair.', slider: [1, 2, 1] },
 };

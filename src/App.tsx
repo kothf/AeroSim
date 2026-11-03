@@ -142,6 +142,10 @@ export default function App() {
       de_per_g: r.man.deltaEPerG, Fs_per_g: r.man.stickForcePerG,
       thrust_req: r.prop.thrustRequired, thrust_avail: r.prop.thrustAvailable, throttle: r.prop.throttle, Cm_T: r.aero.CmT,
       t: sim.t, du: sim.du, dw: sim.dw, dq: sim.dq, dtheta: sim.dtheta, dalpha: sim.dalpha, dh: sim.dh, de_input: sim.deltaE,
+      length_overall: r.points.overallLength, fuselage_length: r.inputs.fuselageLength, fuselage_diameter: r.inputs.fuselageDiameter,
+      span: r.geometry.span, mac: r.geometry.mac, root_chord: r.geometry.rootChord, tip_chord: r.geometry.tipChord, taper: r.inputs.taperRatio,
+      x_ac_wing: r.points.acWing, x_ac_wing_body: r.points.acWingBody, x_ac_aircraft: r.points.acAircraft,
+      x_cp_wing: r.points.cpWing ?? NaN, x_cp_aircraft: r.points.cpAircraft ?? NaN,
       wing_naca: r.inputs.wingNaca, tail_naca: r.inputs.tailNaca,
     });
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
