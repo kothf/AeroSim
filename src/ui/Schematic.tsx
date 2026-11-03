@@ -10,15 +10,17 @@
  *  - engine: station (both views) and thrust-line height (side view); its mass moves the CG
  */
 import { useRef, useState } from 'react';
-import { AircraftInputs, AnalysisResult, DEG, INPUT_BOUNDS, macLeadingEdge, moveEngine, moveWing } from '../engine';
+import { AircraftInputs, AnalysisResult, DEG, INPUT_BOUNDS, MassProperties, itemPosFromStation, macLeadingEdge, moveEngine, moveWing } from '../engine';
 import { useSize } from './useSize';
 import { Hint } from './Fields';
 import { TERMS } from './glossary';
 
-type Kind = 'wing' | 'wingTip' | 'tail' | 'tailTip' | 'hinge' | 'cg' | 'engine' | 'engineSide';
+type Kind = 'wing' | 'wingTip' | 'tail' | 'tailTip' | 'hinge' | 'cg' | 'engine' | 'engineSide' | `item:${string}`;
 
 interface Props {
   r: AnalysisResult;
+  /** computed mass properties when the CG comes from components */
+  mp?: MassProperties | null;
   onChange: (patch: Partial<AircraftInputs>) => void;
 }
 
@@ -30,10 +32,10 @@ const clamp = (k: keyof AircraftInputs, v: number) => {
 const TOP_H_MAX = 420;
 const SIDE_H = 180;
 
-export function Schematic({ r, onChange }: Props) {
+export function Schematic({ r, mp, onChange }: Props) {
   const [ref, size] = useSize<HTMLDivElement>();
   const [active, setActive] = useState<Kind | null>(null);
-  const drag = useRef<{ kind: Kind; x0: number; y0: number; inp: AircraftInputs; geo: AnalysisResult['geometry']; s: number; sSide: number } | null>(null);
+  const drag = useRef<{ kind: Kind; x0: number; y0: number; inp: AircraftInputs; geo: AnalysisResult['geometry']; s: number; sSide: number; zcg: number; st0: number; z0: number } | null>(null);
   const inp = r.inputs;
   const geo = r.geometry;
   const c = geo.mac;
@@ -78,10 +80,13 @@ export function Schematic({ r, onChange }: Props) {
   const QX = (x: number) => sideLeft + x * sSide;
   const QZ = (z: number) => zc + z * sSide;
 
-  const start = (kind: Kind) => (e: React.PointerEvent) => {
+  // CG height below the fuselage reference line (0 in manual mode, where z is relative to the CG)
+  const zcg = mp ? mp.z : 0;
+  const zT = zcg + inp.thrustLineZ; // thrust line height below the reference line
+  const start = (kind: Kind, st0 = 0, z0 = 0) => (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-    drag.current = { kind, x0: e.clientX, y0: e.clientY, inp: { ...inp }, geo: { ...geo }, s, sSide };
+    drag.current = { kind, x0: e.clientX, y0: e.clientY, inp: { ...inp }, geo: { ...geo }, s, sSide, zcg, st0, z0 };
     setActive(kind);
   };
   const move = (e: React.PointerEvent) => {
@@ -90,7 +95,15 @@ export function Schematic({ r, onChange }: Props) {
     const i0 = d.inp, g0 = d.geo;
     // top view: down = aft, right = +span; side view: right = aft, down = +z
     const fine = e.shiftKey ? 0.2 : 1; // hold Shift for fine adjustment
-    const dStation = (fine * (d.kind === 'engineSide' ? e.clientX - d.x0 : e.clientY - d.y0)) / (d.kind === 'engineSide' ? d.sSide : d.s);
+    const side = d.kind === 'engineSide' || d.kind.startsWith('item:');
+    const dStation = (fine * (side ? e.clientX - d.x0 : e.clientY - d.y0)) / (side ? d.sSide : d.s);
+    if (d.kind.startsWith('item:')) {
+      const id = d.kind.slice(5);
+      const st = Math.min(Math.max(d.st0 + dStation, 0), i0.fuselageLength * 1.1);
+      const z = Number((d.z0 + (fine * (e.clientY - d.y0)) / d.sSide).toFixed(3));
+      onChange({ massItems: i0.massItems.map((m) => (m.id === id ? { ...m, pos: Number(itemPosFromStation(m, st, i0, g0).toFixed(3)), z } : m)) });
+      return;
+    }
     const dSpan = (fine * (e.clientX - d.x0)) / d.s;
     switch (d.kind) {
       case 'wing': {
@@ -101,7 +114,8 @@ export function Schematic({ r, onChange }: Props) {
       case 'engine':
       case 'engineSide': {
         const st = Math.min(Math.max(i0.engineStation + dStation, 0), i0.fuselageLength);
-        const z = d.kind === 'engineSide' ? i0.thrustLineZ + (fine * (e.clientY - d.y0)) / d.sSide : i0.thrustLineZ;
+        // thrustLineZ is stored relative to the reference line in components mode (i0 holds it relative to the CG)
+        const z = i0.thrustLineZ + d.zcg + (d.kind === 'engineSide' ? (fine * (e.clientY - d.y0)) / d.sSide : 0);
         onChange(moveEngine(i0, g0, Number(st.toFixed(3)), Number(z.toFixed(3))));
         break;
       }
@@ -241,11 +255,11 @@ export function Schematic({ r, onChange }: Props) {
               <text x={markX} y={p.y} textAnchor="end" dominantBaseline="middle" data-tip={p.tip} className="tip-target">{p.text}</text>
             </g>
           ))}
-          <g className={`sch-cg st-${status} ${active === 'cg' ? 'is-active' : ''}`} onPointerDown={start('cg')}>
+          <g className={`sch-cg st-${status} ${active === 'cg' ? 'is-active' : ''} ${mp ? 'is-computed' : ''}`} onPointerDown={mp ? undefined : start('cg')}>
             <circle cx={cx} cy={SY(cgSt)} r={14} fill="transparent" />
             <circle cx={cx} cy={SY(cgSt)} r={9} className="cg-disc" />
             <path d={`M${cx},${SY(cgSt) - 9} A9,9 0 0 1 ${cx + 9},${SY(cgSt)} L${cx},${SY(cgSt)}Z M${cx},${SY(cgSt) + 9} A9,9 0 0 1 ${cx - 9},${SY(cgSt)} L${cx},${SY(cgSt)}Z`} className="cg-quads" />
-            <title>Drag: CG position</title>
+            <title>{mp ? 'CG computed from the components (move them in the side view, or switch the CG source to manual)' : 'Drag: CG position'}</title>
           </g>
           <circle cx={SX(halfB)} cy={SY(tipLe + ct / 2)} r={8}
             className={`sch-handle ${active === 'wingTip' ? 'is-active' : ''}`} onPointerDown={start('wingTip')}>
@@ -280,20 +294,30 @@ export function Schematic({ r, onChange }: Props) {
             </g>
           )}
           <g className="sch-force weight" data-tip={TERMS.CG}>
-            <line x1={QX(cgSt)} x2={QX(cgSt)} y1={QZ(0)} y2={QZ(fusW) + 18} />
+            <line x1={QX(cgSt)} x2={QX(cgSt)} y1={QZ(zcg)} y2={QZ(fusW) + 18} />
             <path d={`M${QX(cgSt)},${QZ(fusW) + 24} l-5,-8 h10z`} />
             <text x={QX(cgSt) - 6} y={QZ(fusW) + 22} textAnchor="end" className="sch-note">W @ CG</text>
           </g>
-          <line x1={QX(Math.min(inp.engineStation, cgSt) - 0.6)} x2={QX(Math.max(inp.engineStation, cgSt) + 0.6)} y1={QZ(inp.thrustLineZ)} y2={QZ(inp.thrustLineZ)} className="sch-thrust" />
-          <path d={`M${QX(inp.engineStation) - 30},${QZ(inp.thrustLineZ)} l10,-5 v10z`} className="sch-arrow" />
+          <line x1={QX(Math.min(inp.engineStation, cgSt) - 0.6)} x2={QX(Math.max(inp.engineStation, cgSt) + 0.6)} y1={QZ(zT)} y2={QZ(zT)} className="sch-thrust" />
+          <path d={`M${QX(inp.engineStation) - 30},${QZ(zT)} l10,-5 v10z`} className="sch-arrow" />
           <g className={`sch-engine ${active === 'engineSide' ? 'is-active' : ''}`} onPointerDown={start('engineSide')}>
-            <rect x={QX(inp.engineStation) - 10} y={QZ(inp.thrustLineZ) - 8} width={20} height={16} rx={4} />
-            {inp.engineType === 'propeller' && <line x1={QX(inp.engineStation) - 13} x2={QX(inp.engineStation) - 13} y1={QZ(inp.thrustLineZ) - 22} y2={QZ(inp.thrustLineZ) + 22} className="prop" />}
+            <rect x={QX(inp.engineStation) - 10} y={QZ(zT) - 8} width={20} height={16} rx={4} />
+            {inp.engineType === 'propeller' && <line x1={QX(inp.engineStation) - 13} x2={QX(inp.engineStation) - 13} y1={QZ(zT) - 22} y2={QZ(zT) + 22} className="prop" />}
             <title>Drag: engine station and thrust-line height</title>
           </g>
+          {mp && mp.rows.filter((row) => row.id !== 'engine').map((row) => {
+            const rr = Math.max(3, Math.min(9, Math.sqrt(row.mass) * 0.6));
+            return (
+              <g key={row.id} className={`sch-item ${active === `item:${row.id}` ? 'is-active' : ''}`} onPointerDown={start(`item:${row.id}`, row.station, row.z)}>
+                <circle cx={QX(row.station)} cy={QZ(row.z)} r={rr + 4} fill="transparent" />
+                <circle cx={QX(row.station)} cy={QZ(row.z)} r={rr} className="item-dot" />
+                <title>{`${row.name}: ${row.mass.toFixed(0)} kg at ${row.station.toFixed(2)} m, z ${row.z.toFixed(2)} m. Drag to move it.`}</title>
+              </g>
+            );
+          })}
           <g className={`sch-cg st-${status}`}>
-            <circle cx={QX(cgSt)} cy={QZ(0)} r={7} className="cg-disc" />
-            <path d={`M${QX(cgSt)},${QZ(0) - 7} A7,7 0 0 1 ${QX(cgSt) + 7},${QZ(0)} L${QX(cgSt)},${QZ(0)}Z M${QX(cgSt)},${QZ(0) + 7} A7,7 0 0 1 ${QX(cgSt) - 7},${QZ(0)} L${QX(cgSt)},${QZ(0)}Z`} className="cg-quads" />
+            <circle cx={QX(cgSt)} cy={QZ(zcg)} r={7} className="cg-disc" />
+            <path d={`M${QX(cgSt)},${QZ(zcg) - 7} A7,7 0 0 1 ${QX(cgSt) + 7},${QZ(zcg)} L${QX(cgSt)},${QZ(zcg)}Z M${QX(cgSt)},${QZ(zcg) + 7} A7,7 0 0 1 ${QX(cgSt) - 7},${QZ(zcg)} L${QX(cgSt)},${QZ(zcg)}Z`} className="cg-quads" />
           </g>
           <text x={width - 6} y={14} textAnchor="end" className="sch-note">
             T = {(r.prop.thrustRequired / 1000).toFixed(2)} kN · z_T = {inp.thrustLineZ.toFixed(2)} m {inp.thrustLineZ > 0 ? '(below CG: nose-up)' : inp.thrustLineZ < 0 ? '(above CG: nose-down)' : '(through CG)'}

@@ -78,6 +78,25 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: 'mass',
+    title: 'Mass & balance (CG from components)',
+    body: (
+      <>
+        <p>With the CG source set to <b>From components</b>, the sidebar table lists each component's mass, longitudinal position and height z below the fuselage reference line. The engine row comes from the Powerplant section. The CG, total mass and I_yy are computed from them:</p>
+        <F>x_cg = Σ m_i x_i / Σ m_i      z_cg = Σ m_i z_i / Σ m_i</F>
+        <F>I_yy = Σ m_i [(x_i − x_cg)² + (z_i − z_cg)²] + Σ I_own,i</F>
+        <p>Positions can be measured from the nose, as a fraction of the fuselage length, as a fraction of the MAC (wing structure and wing fuel, which move with the wing), or from the tail AC (tail structure, moves with the tail). So moving the wing, the tail or the engine now moves the CG. Components are drawn as purple dots in the side view; drag them to move them. Switch to <b>Manual</b> to type the CG, mass and I_yy directly.</p>
+        <h4>Engine installation height</h4>
+        <p>In components mode the thrust-line height is measured below the reference line, and the model uses its offset from the CG, z_T = z_engine − z_cg (the engine mass itself also shifts z_cg). z_T enters in two places:</p>
+        <ul>
+          <li>Trim: C_m,T = T z_T/(q S c̄) is added to C_m0. A thrust line below the CG pitches the nose up, so the trim elevator moves trailing-edge down.</li>
+          <li>Propeller only: M_u = z_T dT/du / I_yy. Propeller thrust falls with speed, so a low thrust line adds phugoid damping and lengthens the period; with a jet (constant thrust) there is no change.</li>
+        </ul>
+        <p>Neutral points, static margin, the short period and stick force per g do not change: a constant thrust offset shifts the trim, not the slopes. Not modelled: propeller normal force, slipstream on the tail and throttle-to-pitch coupling.</p>
+      </>
+    ),
+  },
+  {
     id: 'acCp',
     title: 'AC and CP',
     body: (

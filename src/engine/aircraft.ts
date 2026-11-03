@@ -3,6 +3,23 @@ import type { LiftSlopeMethod } from './wing';
 
 export type EngineType = 'propeller' | 'jet';
 
+/** Where a component's position is measured from (see massBalance.ts). */
+export type MassRef = 'nose' | 'fuselage' | 'mac' | 'tail';
+
+export interface MassItem {
+  id: string;
+  name: string;
+  mass: number; // kg
+  ref: MassRef;
+  /** position in the reference's unit: m (nose, tail) or fraction (fuselage length, MAC) */
+  pos: number;
+  /** height below the fuselage reference line [m] (positive down) */
+  z: number;
+}
+
+/** 'components': CG, mass and I_yy come from massItems + the engine; 'manual': typed in directly. */
+export type MassMode = 'components' | 'manual';
+
 export interface AircraftInputs {
   // Main wing
   wingNaca: string;
@@ -36,9 +53,15 @@ export interface AircraftInputs {
   propEfficiency: number; // eta_p
   maxThrustKn: number; // total sea-level static thrust (jet)
   engineStation: number; // m aft of nose (propeller disc / nozzle reference = engine CG)
-  thrustLineZ: number; // m, thrust line BELOW the CG (positive = nose-up thrust moment)
+  /**
+   * m, thrust line height, positive DOWN. Manual mass mode: below the CG. Components mode: below the
+   * fuselage reference line (the offset from the CG then follows from the computed CG height).
+   */
+  thrustLineZ: number;
   engineMass: number; // kg (included in total mass)
   // Mass & balance
+  massMode: MassMode;
+  massItems: MassItem[];
   xcg: number; // fraction of MAC, 0..1
   mass: number; // kg
   iyy: number; // kg m^2
@@ -52,6 +75,19 @@ export interface AircraftInputs {
   limitLoadFactor: number;
   liftSlopeMethod: LiftSlopeMethod;
 }
+
+/** Mass breakdown of the default four-seat aircraft at MTOW (engine comes from the powerplant). */
+export const DEFAULT_MASS_ITEMS: MassItem[] = [
+  { id: 'wing', name: 'Wing structure', mass: 150, ref: 'mac', pos: 0.4, z: 0.3 },
+  { id: 'fuel', name: 'Fuel (wing tanks)', mass: 150, ref: 'mac', pos: 0.3, z: 0.3 },
+  { id: 'fus', name: 'Fuselage structure', mass: 160, ref: 'fuselage', pos: 0.38, z: 0 },
+  { id: 'tail', name: 'Tail (H + V)', mass: 35, ref: 'tail', pos: 0.1, z: -0.6 },
+  { id: 'gear', name: 'Landing gear', mass: 60, ref: 'nose', pos: 2.5, z: 0.5 },
+  { id: 'sys', name: 'Systems & avionics', mass: 80, ref: 'nose', pos: 1.5, z: -0.2 },
+  { id: 'front', name: 'Pilot + front pax', mass: 170, ref: 'nose', pos: 2.5, z: -0.2 },
+  { id: 'rear', name: 'Rear pax', mass: 85, ref: 'nose', pos: 3.4, z: -0.2 },
+  { id: 'bag', name: 'Baggage', mass: 30, ref: 'nose', pos: 3.9, z: -0.1 },
+];
 
 /** Defaults: a four-seat, single-engine general-aviation aircraft in cruise. */
 export const DEFAULT_INPUTS: AircraftInputs = {
@@ -84,6 +120,8 @@ export const DEFAULT_INPUTS: AircraftInputs = {
   engineStation: 0.7,
   thrustLineZ: 0.12,
   engineMass: 230,
+  massMode: 'components',
+  massItems: DEFAULT_MASS_ITEMS,
   xcg: 0.24,
   mass: 1150,
   iyy: 2400,

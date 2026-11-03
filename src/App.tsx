@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AircraftInputs, AnalysisResult, DEFAULT_INPUTS, DEG, analyze, cgRootLocus, simulatePulse, writeMat,
+  AircraftInputs, AnalysisResult, DEFAULT_INPUTS, DEG, analyze, applyMassBreakdown, cgRootLocus, massProperties, simulatePulse, writeMat,
 } from './engine';
 import { LineChart, Series } from './ui/LineChart';
 import { SPlane } from './ui/SPlane';
@@ -47,10 +47,13 @@ export default function App() {
   }, []);
   const set = useCallback((patch: Partial<AircraftInputs>) => setInp((p) => ({ ...p, ...patch })), []);
 
-  const { out, r, sim, latency } = useAnalysis(inp, pulseDeg, pulseDur);
+  // mass & balance: in components mode the CG, mass and I_yy come from the component breakdown
+  const mp = useMemo(() => (inp.massMode === 'components' ? massProperties(inp) : null), [inp]);
+  const eff = useMemo(() => applyMassBreakdown(inp), [inp]);
+  const { out, r, sim, latency } = useAnalysis(eff, pulseDeg, pulseDur);
   // the CG locus does not depend on the current CG; recompute only when anything else changes
-  const locusKey = JSON.stringify({ ...inp, xcg: 0 });
-  const locus = useMemo(() => cgRootLocus(inp, 0.02, Math.min(0.98, Math.max(r.stat.xnp + 0.2, 0.6)), 48),
+  const locusKey = JSON.stringify({ ...eff, xcg: 0, massItems: 0 });
+  const locus = useMemo(() => cgRootLocus(eff, 0.02, Math.min(0.98, Math.max(r.stat.xnp + 0.2, 0.6)), 48),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [locusKey, r.stat.xnp]);
 
@@ -134,6 +137,7 @@ export default function App() {
       wn_ph: r.ss.modes.phugoid.wn, zeta_ph: r.ss.modes.phugoid.zeta,
       Xu: D.Xu, Xw: D.Xw, Zu: D.Zu, Zw: D.Zw, Mu: D.Mu, Mw: D.Mw, Mwdot: D.Mwdot, Mq: D.Mq, Zde: D.Zde, Mde: D.Mde,
       u0: r.flight.u0, rho: r.flight.atm.density, qbar: r.flight.qbar,
+      mass: r.inputs.mass, Iyy: r.inputs.iyy, z_T: r.inputs.thrustLineZ, z_cg: mp ? mp.z : 0,
       x_cg: r.inputs.xcg, x_np: r.stat.xnp, x_np_free: r.stat.xnpFree, x_mp: r.man.xmp, static_margin: r.stat.staticMargin,
       CL_alpha: r.aero.CLa, CL_alpha_wing: r.aero.CLaWing, CL_alpha_tail: r.aero.CLaTail, Cm0: r.aero.Cm0, Cm_alpha: r.aero.Cma,
       Cm_q: r.aero.Cmq, Cm_alphadot: r.aero.Cmadot, Cm_de: r.aero.Cmde, CL_de: r.aero.CLde, deps_dalpha: r.aero.deda,
@@ -186,15 +190,18 @@ export default function App() {
             : `Cm-α slope is only ${r.aero.Cma.toFixed(3)} /rad. Move the CG forward of ${((r.stat.xnp - 0.05) * 100).toFixed(1)}% MAC for a 5% margin.`}
         </div>
       )}
+      {mp && (mp.xcg < 0 || mp.xcg > 1) && (
+        <div className="alert st-unstable" role="alert">✕ The computed CG is at {(mp.xcg * 100).toFixed(1)}% MAC, outside the 0–100% MAC range the model accepts (it is clamped to {mp.xcg < 0 ? '0' : '100'}%). Move components or the wing.</div>
+      )}
       {error && <div className="alert st-marginal" role="alert">! {error.field === 'wingNaca' ? 'Wing' : 'Tail'} NACA code rejected: {error.error}</div>}
 
       <div className="layout">
-        <Sidebar inp={inp} set={set} onReset={() => setInp(DEFAULT_INPUTS)} />
+        <Sidebar inp={inp} set={set} mp={mp} onReset={() => setInp(DEFAULT_INPUTS)} />
         <main className="canvas">
           <MarginGauge r={r} onExplain={() => setHelp({ open: true, section: 'points' })} />
           <div className="row2">
             <section className="panel">
-              <Schematic r={r} onChange={set} />
+              <Schematic r={r} mp={mp} onChange={set} />
             </section>
             <section className="panel">
               <div className="selector" role="tablist" aria-label="Graph selector">
