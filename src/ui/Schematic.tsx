@@ -54,7 +54,7 @@ export function Schematic({ r, onChange }: Props) {
 
   // ---- top view: fuselage station runs down the screen, span runs across
   const width = Math.max(size.width, 300);
-  const labelGutter = 78;
+  const labelGutter = 110;
   const worldLen = Math.max(fusL, tipLe + c, tailTe) + 0.3;
   const worldSpan = 2 * Math.max(halfB, hbT) + 0.4;
   const s = Math.min((width - 2 * labelGutter) / worldSpan, (TOP_H_MAX - 30) / worldLen);
@@ -145,7 +145,10 @@ export function Schematic({ r, onChange }: Props) {
     L${P(fusL, -fusW * 0.25)} L${P(fusL * 0.55, -fusW)} L${P(1.8, -fusW)} C${P(1.0, -fusW)} ${P(0.3, -fusW)} ${P(0, 0)}Z`;
   const status = r.stat.status;
   const engY = inp.engineCount === 2 ? [halfB * 0.35, -halfB * 0.35] : [0];
-  const markX = SX(-Math.max(halfB, hbT)) - 6; // markers' labels sit left of the planform
+  // MAC ruler in the left gutter (same vertical scale as the planform) carries the labels,
+  // so the planform itself stays symmetric about the fuselage centreline
+  const rulerX = labelGutter - 10;
+  const markX = rulerX - 8;
 
   // CG / NP / NP' / MP labels to the left of the planform, de-conflicted vertically
   const labels = [
@@ -182,6 +185,7 @@ export function Schematic({ r, onChange }: Props) {
             <title>Drag: wing station along the fuselage</title>
           </polygon>
           <line x1={SX(halfB / 2)} x2={SX(halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
+          <line x1={SX(-halfB / 2)} x2={SX(-halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
           <text x={SX(halfB / 2) + 6} y={SY(macLe + c / 2)} className="sch-note" dominantBaseline="middle">MAC {c.toFixed(2)} m</text>
           <polygon points={poly([[tailLe, -hbT], [tailLe, hbT], [tailTe, hbT], [tailTe, -hbT]])}
             className={`sch-tail ${active === 'tail' ? 'is-active' : ''}`} onPointerDown={start('tail')}>
@@ -205,9 +209,21 @@ export function Schematic({ r, onChange }: Props) {
               <title>Drag: engine station (engine mass moves the CG)</title>
             </g>
           ))}
+          {/* symmetric station ticks across the fuselage */}
+          {placed.map((p) => (
+            <line key={`t-${p.cls}`} className={`sch-tick ${p.cls}`} x1={SX(-fusW) - 5} x2={SX(fusW) + 5} y1={SY(p.st)} y2={SY(p.st)} />
+          ))}
+          {/* MAC ruler with labels */}
+          <g className="sch-ruler-v">
+            <line x1={rulerX} x2={rulerX} y1={SY(macLe)} y2={SY(macLe + c)} />
+            <line x1={rulerX - 4} x2={rulerX + 4} y1={SY(macLe)} y2={SY(macLe)} />
+            <line x1={rulerX - 4} x2={rulerX + 4} y1={SY(macLe + c)} y2={SY(macLe + c)} />
+            <text x={rulerX} y={SY(macLe) - 6} textAnchor="middle">LE</text>
+            <text x={rulerX} y={SY(macLe + c) + 12} textAnchor="middle">TE</text>
+          </g>
           {placed.map((p) => (
             <g key={p.cls} className={`sch-mark ${p.cls}`}>
-              <polyline points={`${cx},${SY(p.st)} ${markX + 10},${SY(p.st)} ${markX + 4},${p.y}`} fill="none" />
+              <polyline points={`${rulerX + 6},${SY(p.st)} ${rulerX - 2},${SY(p.st)} ${markX + 2},${p.y}`} fill="none" />
               <text x={markX} y={p.y} textAnchor="end" dominantBaseline="middle">{p.text}</text>
             </g>
           ))}

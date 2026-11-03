@@ -78,4 +78,13 @@ describe('Installation moves from the schematic', () => {
     expect(cgStation(after.inputs, after.geometry)).toBeCloseTo(cgStation(r.inputs, r.geometry), 10);
     expect(after.stat.staticMargin).toBeGreaterThan(r.stat.staticMargin - 0.2); // sanity
   });
+
+  it('the wing stops when the fixed CG reaches its leading edge instead of dragging the CG along', () => {
+    const r = run();
+    const patch = moveWing(r.inputs, r.geometry, r.inputs.wingStation + 5);
+    expect(patch.xcg!).toBeCloseTo(0, 12);
+    expect(patch.wingStation!).toBeCloseTo(r.inputs.wingStation + r.inputs.xcg * r.geometry.mac, 12);
+    const after = run(patch);
+    expect(cgStation(after.inputs, after.geometry)).toBeCloseTo(cgStation(r.inputs, r.geometry), 10);
+  });
 });

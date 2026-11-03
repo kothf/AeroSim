@@ -7,7 +7,8 @@ import { SPlane } from './ui/SPlane';
 import { Schematic } from './ui/Schematic';
 import { Sidebar } from './ui/Sidebar';
 import { MarginGauge, Workspace } from './ui/Workspace';
-import { Slider } from './ui/Fields';
+import { Hint, Slider } from './ui/Fields';
+import { TipLayer } from './ui/TipLayer';
 
 type GraphKind = 'cm' | 'splane' | 'time';
 const PLAYBACK_MS = 8000;
@@ -183,7 +184,8 @@ export default function App() {
             <section className="panel">
               <div className="selector" role="tablist" aria-label="Graph selector">
                 {([['cm', 'Cm–α'], ['splane', 's-Plane poles'], ['time', 'Time history']] as [GraphKind, string][]).map(([k, l]) => (
-                  <button key={k} role="tab" aria-selected={graph === k} className={graph === k ? 'tab on' : 'tab'} onClick={() => setGraph(k)}>{l}</button>
+                  <button key={k} role="tab" aria-selected={graph === k} className={graph === k ? 'tab on' : 'tab'} onClick={() => setGraph(k)}
+                    data-tip={{ cm: 'Total pitching moment coefficient vs angle of attack. A negative slope (C_mα < 0) means static stability; the trim point is where C_m = 0.', splane: 'Eigenvalues of the A matrix on the complex plane. Left half = stable. Dots show how the poles move as the CG is swept; click one to move the CG there.', time: 'Response to an elevator pulse: fast short-period α oscillation (left) and slow phugoid exchange of speed and height (right).' }[k]}>{l}</button>
                 ))}
                 <span className="spacer" />
                 <button className="btn primary" onClick={pulse}>Pulse elevator</button>
@@ -231,7 +233,7 @@ export default function App() {
           </div>
 
           <section className="panel">
-            <div className="panel-title">Flight test: elevator deflection and stick force vs load factor</div>
+            <div className="panel-title">Flight test: elevator deflection and stick force vs load factor<Hint text="Steady pull-up at constant speed. Left: elevator angle needed per load factor; the slope dδe/dn shrinks to zero as the CG approaches the maneuver point (MP). Right: stick force with the trim tab nulling the 1 g force; the green band is the acceptable stick-force-per-g range." /></div>
             <div className="twin even">
               <LineChart ariaLabel="Elevator versus load factor" title="δe vs n (slope = stick-fixed maneuver margin)" series={ftData.de}
                 xLabel="Load factor n [g]" yLabel="δe [deg]" xUnit=" g" yUnit="°" height={250}
@@ -246,6 +248,7 @@ export default function App() {
         </main>
       </div>
       <Workspace r={r} latency={latency} />
+      <TipLayer />
       <footer className="foot">
         Small-disturbance stability-axis model (Nelson / Etkin). Thin airfoil c<sub>m,c/4</sub> = (π/4)(A<sub>2</sub> − A<sub>1</sub>).
         Section c<sub>lα</sub> = 2π. Propeller normal-force and Z<sub>ẇ</sub>, Z<sub>q</sub> terms neglected.
