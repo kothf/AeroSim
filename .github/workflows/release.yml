@@ -1,11 +1,13 @@
 name: Release
 
-# Push a tag like v0.1.0 (matching package.json), or press "Run workflow" to release main's
-# package.json version. Publishes a GitHub release with aerosim-<version>.tar.gz + .sha256,
-# which aerocat.tech pins by version and checksum in its vendor.json.
+# Every push to main is released automatically. The version is package.json's; when that version
+# is already tagged (the merged PR did not bump it), the patch number is bumped and committed to
+# main first. Then: tests, package, tag main, GitHub release with aerosim-<version>.tar.gz + .sha256
+# (aerocat.tech pins it by version and checksum in its vendor.json), and the site's vendor update.
+# "Run workflow" does the same for main by hand.
 on:
   push:
-    tags: ['v*.*.*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,45 +19,64 @@ concurrency:
 
 jobs:
   release:
+    # the bump commit is pushed with github.token, which starts no new run
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release)') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Tag must match package.json version
+      # a run queued behind another may find main already released: nothing to do
+      - name: Already released?
+        run: |
+          if git tag --points-at HEAD | grep -q '^v'; then echo "::notice::main is already released"; echo "SKIP=1" >> "$GITHUB_ENV"; fi
+
+      - if: env.SKIP != '1'
+        run: npm ci
+      - if: env.SKIP != '1'
+        run: npm test
+
+      - if: env.SKIP != '1'
+        name: Version (bump the patch if this one is already released)
         run: |
           pkg="$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            tag="v$pkg"
-            if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then echo "::error::Tag $tag already exists"; exit 1; fi
-          else
-            tag="$GITHUB_REF_NAME"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$pkg" > /dev/null; then
+            npm version patch --no-git-tag-version > /dev/null
+            pkg="$(node -p "require('./package.json').version")"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -qam "chore(release): $pkg"
+            git push origin HEAD:main
           fi
-          if [ "${tag#v}" != "$pkg" ]; then echo "::error::Tag $tag does not match package.json $pkg"; exit 1; fi
-          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "TAG=v$pkg" >> "$GITHUB_ENV"
 
-      - run: npm ci
-      - run: npm test
-      - run: npm run package -- "${TAG#v}"
+      - if: env.SKIP != '1'
+        run: npm run package -- "${TAG#v}"
 
-      - name: Tag the release (Run workflow)
-        if: github.event_name == 'workflow_dispatch'
+      - if: env.SKIP != '1'
+        name: Tag main
         run: |
-          git tag "$TAG" "$GITHUB_SHA"
+          git tag "$TAG" HEAD
           git push origin "refs/tags/$TAG"
 
-      - name: Publish GitHub release
+      - if: env.SKIP != '1'
+        name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$TAG" release/*.tar.gz release/*.tar.gz.sha256 --title "AeroSim $TAG" --generate-notes --verify-tag
 
-      # Same hook as the other vendored tools: needs a SITE_DISPATCH_TOKEN secret allowed to run
-      # workflows in kothf/astro_source-new_theme; without it the site's scheduled update picks it up.
-      - name: Ask aerocat.tech to pick up this release
+      # Needs a SITE_DISPATCH_TOKEN secret allowed to run workflows in kothf/astro_source-new_theme;
+      # without it the site's scheduled vendor update picks the release up later.
+      - if: env.SKIP != '1'
+        name: Ask aerocat.tech to pick up this release
         env:
           SITE_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
