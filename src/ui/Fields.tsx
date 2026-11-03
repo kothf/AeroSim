@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { parseNaca, surfaceCoordinates } from '../engine';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { NACA_PRESETS, parseNaca, solveThinAirfoil, surfaceCoordinates } from '../engine';
 
 interface NumProps {
   label: string;
@@ -62,41 +62,115 @@ interface NacaProps {
   onChange: (code: string) => void;
 }
 
+/** SVG path of a NACA section (upper surface forward, lower surface back), y up. */
+function profilePath(code: string, n = 50): string | null {
+  const r = parseNaca(code);
+  if (!r.ok) return null;
+  const { upper, lower } = surfaceCoordinates(r.profile, n);
+  return `M${upper.map(([x, y]) => `${x},${-y}`).join('L')}L${lower.slice().reverse().map(([x, y]) => `${x},${-y}`).join('L')}Z`;
+}
+
+function ProfileSvg({ code, className = 'profile', n = 50 }: { code: string; className?: string; n?: number }) {
+  const d = useMemo(() => profilePath(code, n), [code, n]);
+  if (!d) return null;
+  return (
+    <svg className={className} viewBox="-0.02 -0.16 1.04 0.32" preserveAspectRatio="xMidYMid meet" aria-hidden={className !== 'profile'} aria-label={`NACA ${code} section`}>
+      <line x1="0" x2="1" y1="0" y2="0" className="chord" />
+      <path d={d} className="section" />
+    </svg>
+  );
+}
+
+const PRESET_ROWS = NACA_PRESETS.flatMap((g) =>
+  g.presets.map((p) => {
+    const r = parseNaca(p.code);
+    const s = r.ok ? solveThinAirfoil(r.profile) : null;
+    return { ...p, group: g.title, alpha0: s ? (s.alpha0 * 180) / Math.PI : 0, cm: s ? s.cmC4 : 0 };
+  }),
+);
+
+/** Drop-down list of common sections, each with a small drawing and its thin-airfoil alpha_0 and c_m. */
+function NacaPicker({ value, onPick, label }: { value: string; onPick: (code: string) => void; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const i = PRESET_ROWS.findIndex((p) => p.code === value);
+    setActive(i >= 0 ? i : 0);
+    const close = (e: MouseEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    requestAnimationFrame(() => list.current?.focus());
+    return () => document.removeEventListener('mousedown', close);
+  }, [open, value]);
+  useEffect(() => {
+    if (open) list.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
+  const pick = (code: string) => { onPick(code); setOpen(false); };
+  const id = `naca-list-${label.replace(/\s+/g, '-')}`;
+  return (
+    <div className="naca-picker" ref={root}>
+      <button type="button" className="naca-toggle" aria-haspopup="listbox" aria-expanded={open} aria-controls={id}
+        aria-label={`Choose a ${label.toLowerCase()} from the list`} onClick={() => setOpen((o) => !o)}>▾</button>
+      {open && (
+        <ul className="naca-menu" role="listbox" id={id} ref={list} tabIndex={-1} aria-label={`${label} presets`}
+          aria-activedescendant={`${id}-${active}`}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, PRESET_ROWS.length - 1)); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
+            else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(PRESET_ROWS[active].code); }
+            else if (e.key === 'Escape' || e.key === 'Tab') setOpen(false);
+          }}>
+          {PRESET_ROWS.map((p, i) => (
+            <Fragment key={p.code}>
+            {(i === 0 || PRESET_ROWS[i - 1].group !== p.group) && <li role="presentation" className="naca-group">{p.group}</li>}
+            <li id={`${id}-${i}`} data-i={i} role="option" aria-selected={p.code === value}
+              className={`naca-opt ${i === active ? 'active' : ''} ${p.code === value ? 'selected' : ''}`}
+              onMouseEnter={() => setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => pick(p.code)}>
+              <ProfileSvg code={p.code} className="naca-thumb" n={24} />
+              <span className="naca-opt-text">
+                <b>NACA {p.code}</b>
+                <span>{p.note}</span>
+                <span className="naca-opt-num">α₀ {p.alpha0.toFixed(1)}°, c_m {p.cm.toFixed(3)}</span>
+              </span>
+            </li>
+            </Fragment>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Strict NACA parser on the client: invalid codes are blocked and never reach the engine. */
 export function NacaField({ label, value, onChange, hint }: NacaProps) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
   const parsed = useMemo(() => parseNaca(text), [text]);
-  const shown = parseNaca(value);
-  const shape = useMemo(() => (shown.ok ? surfaceCoordinates(shown.profile, 50) : null), [value]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={`field naca ${parsed.ok ? '' : 'has-error'}`}>
       <label className="field-label" htmlFor={`naca-${label}`}>{label}{hint && <Hint text={hint} />}</label>
-      <span className="field-input">
-        <span className="unit pre">NACA</span>
-        <input
-          id={`naca-${label}`}
-          value={text}
-          maxLength={5}
-          inputMode="numeric"
-          onChange={(e) => {
-            const t = e.target.value.replace(/[^0-9]/g, '').slice(0, 5);
-            setText(t);
-            if (parseNaca(t).ok) onChange(t);
-          }}
-          aria-invalid={!parsed.ok}
-        />
-      </span>
-      {!parsed.ok && <span className="field-error">{parsed.error}. Using NACA {value}.</span>}
-      {shape && (
-        <svg className="profile" viewBox="-0.02 -0.16 1.04 0.32" preserveAspectRatio="xMidYMid meet" aria-label={`NACA ${value} section`}>
-          <line x1="0" x2="1" y1="0" y2="0" className="chord" />
-          <path
-            d={`M${shape.upper.map(([x, y]) => `${x},${-y}`).join('L')}L${shape.lower.slice().reverse().map(([x, y]) => `${x},${-y}`).join('L')}Z`}
-            className="section"
+      <div className="naca-row">
+        <span className="field-input">
+          <span className="unit pre">NACA</span>
+          <input
+            id={`naca-${label}`}
+            value={text}
+            maxLength={5}
+            inputMode="numeric"
+            onChange={(e) => {
+              const t = e.target.value.replace(/[^0-9]/g, '').slice(0, 5);
+              setText(t);
+              if (parseNaca(t).ok) onChange(t);
+            }}
+            aria-invalid={!parsed.ok}
           />
-        </svg>
-      )}
+        </span>
+        <NacaPicker value={value} label={label} onPick={(c) => { setText(c); onChange(c); }} />
+      </div>
+      {!parsed.ok && <span className="field-error">{parsed.error}. Using NACA {value}.</span>}
+      <ProfileSvg code={value} />
     </div>
   );
 }

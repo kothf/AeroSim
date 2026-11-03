@@ -120,6 +120,23 @@ select { border: 1px solid var(--border); border-radius: 5px; background: var(--
 .profile { width: 100%; height: 52px; margin-top: 4px; }
 .profile .section { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 0.006; }
 .profile .chord { stroke: var(--axis); stroke-width: 0.003; stroke-dasharray: 0.02 0.015; }
+.naca-row { display: flex; gap: 4px; align-items: stretch; }
+.naca-row .field-input { flex: 1; }
+.naca-picker { position: relative; display: flex; }
+.naca-toggle { border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text-2); width: 30px; cursor: pointer; font-size: 12px; }
+.naca-toggle:hover, .naca-toggle[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+.naca-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: 280px; max-width: calc(100vw - 32px); max-height: 340px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); }
+.naca-menu:focus { outline: none; }
+.naca-opt { display: grid; grid-template-columns: 92px 1fr; gap: 2px 8px; align-items: center; padding: 4px 6px; border-radius: 5px; cursor: pointer; }
+.naca-opt.active { background: var(--surface-2); }
+.naca-opt.selected .naca-opt-text b { color: var(--accent); }
+.naca-group { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 6px 6px 2px; cursor: default; }
+.naca-thumb { width: 92px; height: 30px; }
+.naca-thumb .section { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 0.012; }
+.naca-thumb .chord { stroke: var(--axis); stroke-width: 0.006; stroke-dasharray: 0.04 0.03; }
+.naca-opt-text { display: flex; flex-direction: column; min-width: 0; font-size: 11.5px; color: var(--text-2); line-height: 1.3; }
+.naca-opt-text b { font-family: var(--mono); color: var(--text); font-weight: 600; font-size: 12px; }
+.naca-opt-num { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
 
 .canvas { padding: 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
