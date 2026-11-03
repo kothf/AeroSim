@@ -323,3 +323,5 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border)
   .help-nav button { white-space: nowrap; }
   .glossary div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
+
+h1 .version { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-family: var(--mono); font-size: 11px; font-weight: 600; vertical-align: 2px; cursor: help; }
