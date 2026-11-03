@@ -2,6 +2,7 @@ import type { AnalysisResult, ModeInfo } from '../engine';
 import { DEG, N_TO_LBF } from '../engine';
 import { fixed } from './scale';
 import { Hint } from './Fields';
+import { TERMS } from './glossary';
 
 const root = (m: ModeInfo) => {
   const [a, b] = m.roots;
@@ -18,7 +19,7 @@ function Row({ k, v, hint }: { k: React.ReactNode; v: React.ReactNode; hint?: st
   );
 }
 
-export function MarginGauge({ r }: { r: AnalysisResult }) {
+export function MarginGauge({ r, onExplain }: { r: AnalysisResult; onExplain?: () => void }) {
   const { xcg } = r.inputs;
   const { xnp, xnpFree, status, staticMargin } = r.stat;
   const xmp = r.man.xmp;
@@ -28,16 +29,19 @@ export function MarginGauge({ r }: { r: AnalysisResult }) {
   return (
     <div className={`gauge st-${status}`} role="status" aria-live="polite">
       <div className="gauge-head">
-        <span className="badge"><span className="badge-icon" aria-hidden>{icon}</span>{label}</span>
+        <span className="gauge-left">
+          <span className="badge"><span className="badge-icon" aria-hidden>{icon}</span>{label}</span>
+          {onExplain && <button className="linkish" onClick={onExplain}>What are CG, NP, NP′ and MP?</button>}
+        </span>
         <span className="gauge-sm"><Hint text="Static margin = x_np − x_cg (stick-fixed). Positive = stable. Stick-free margin uses the floating-elevator neutral point; maneuver margin = x_mp − x_cg. Green > 5% MAC, amber 0–5%, red when the CG is aft of the NP." /> Static margin <b>{(staticMargin * 100).toFixed(1)}%</b> MAC · stick-free {(r.stat.staticMarginFree * 100).toFixed(1)}% · maneuver {(r.man.maneuverMargin * 100).toFixed(1)}%</span>
       </div>
-      <div className="gauge-track" aria-hidden>
+      <div className="gauge-track" >
         <div className="gauge-fill" style={{ left: pos(Math.min(xcg, xnp)), width: `${Math.abs(xnp - xcg) * 100}%` }} />
         {[0, 0.25, 0.5, 0.75, 1].map((t) => <span key={t} className="gauge-tick" style={{ left: pos(t) }}>{t * 100}</span>)}
-        <span className="gauge-mk mk-npf" style={{ left: pos(xnpFree) }} title="Stick-free NP">NP'</span>
-        <span className="gauge-mk mk-np" style={{ left: pos(xnp) }} title="Stick-fixed NP">NP</span>
-        <span className="gauge-mk mk-mp" style={{ left: pos(xmp) }} title="Maneuver point">MP</span>
-        <span className="gauge-cg" style={{ left: pos(xcg) }} title="CG">CG</span>
+        <span className="gauge-mk mk-npf" style={{ left: pos(xnpFree) }} data-tip={`${TERMS.NPF} Now ${(xnpFree * 100).toFixed(1)}% MAC.`}>NP'</span>
+        <span className="gauge-mk mk-np" style={{ left: pos(xnp) }} data-tip={`${TERMS.NP} Now ${(xnp * 100).toFixed(1)}% MAC.`}>NP</span>
+        <span className="gauge-mk mk-mp" style={{ left: pos(xmp) }} data-tip={`${TERMS.MP} Now ${(xmp * 100).toFixed(1)}% MAC.`}>MP</span>
+        <span className="gauge-cg" style={{ left: pos(xcg) }} data-tip={`${TERMS.CG} Now ${(xcg * 100).toFixed(1)}% MAC.`}>CG</span>
       </div>
     </div>
   );

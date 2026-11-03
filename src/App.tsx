@@ -9,6 +9,7 @@ import { Sidebar } from './ui/Sidebar';
 import { MarginGauge, Workspace } from './ui/Workspace';
 import { Hint, Slider } from './ui/Fields';
 import { TipLayer } from './ui/TipLayer';
+import { HelpDialog } from './ui/HelpDialog';
 
 type GraphKind = 'cm' | 'splane' | 'time';
 const PLAYBACK_MS = 8000;
@@ -35,6 +36,15 @@ export default function App() {
   const [pulseDur, setPulseDur] = useState(0.5);
   const [reveal, setReveal] = useState(1);
   const [theme, setTheme] = useState<'auto' | 'light' | 'dark'>('auto');
+  const [help, setHelp] = useState<{ open: boolean; section?: string }>({ open: false });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.key === '?' && !(t instanceof HTMLInputElement || t instanceof HTMLSelectElement)) setHelp({ open: true });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const set = useCallback((patch: Partial<AircraftInputs>) => setInp((p) => ({ ...p, ...patch })), []);
 
   const { out, r, sim, latency } = useAnalysis(inp, pulseDeg, pulseDur);
@@ -71,10 +81,10 @@ export default function App() {
     const line = (res: AnalysisResult, de: number) => alphas.map((a) => [a, res.aero.Cm0 + res.aero.Cma * a * DEG + res.aero.Cmde * de] as [number, number]);
     const atNp = analyze({ ...inp, xcg: r.stat.xnp });
     const series: Series[] = [
-      { id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe = 0`, color: 'var(--s1)', points: line(r, 0) },
-      { id: 'trim', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe trim ${(r.stat.trim.deltaE / DEG).toFixed(1)}°`, color: 'var(--s2)', points: line(r, r.stat.trim.deltaE) },
+      { id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe = 0`, color: 'var(--s1)', points: line(r, 0), hint: 'C_m vs α at the current CG with the elevator neutral. Its slope is C_mα.' },
+      { id: 'trim', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe trim ${(r.stat.trim.deltaE / DEG).toFixed(1)}°`, color: 'var(--s2)', points: line(r, r.stat.trim.deltaE), hint: 'Same CG with the trim elevator angle: the line is shifted so that it crosses C_m = 0 at the trim angle of attack.' },
     ];
-    if (atNp.ok) series.push({ id: 'np', label: `CG at NP ${(r.stat.xnp * 100).toFixed(1)}% (neutral)`, color: 'var(--muted)', dash: '5 4', points: line(atNp.result, 0) });
+    if (atNp.ok) series.push({ id: 'np', label: `CG at NP ${(r.stat.xnp * 100).toFixed(1)}% (neutral)`, color: 'var(--muted)', dash: '5 4', points: line(atNp.result, 0), hint: 'Reference: CG placed at the stick-fixed neutral point. The slope is zero (neutral stability); CG aft of it tilts the line upward (unstable).' });
     return series;
   }, [inp, r]);
 
@@ -85,11 +95,11 @@ export default function App() {
     const deLine = (res: AnalysisResult) => ns.map((n) => [n, (res.stat.trim.deltaE + (n - 1) * res.man.deltaEPerG) / DEG] as [number, number]);
     const fwd = analyze({ ...inp, xcg: Math.max(0, r.inputs.xcg - 0.1) });
     const mp = analyze({ ...inp, xcg: Math.min(1, r.man.xmp) });
-    const de: Series[] = [{ id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%`, color: 'var(--s1)', points: deLine(r) }];
-    if (fwd.ok) de.push({ id: 'fwd', label: `CG ${(fwd.result.inputs.xcg * 100).toFixed(1)}% (fwd)`, color: 'var(--s3)', points: deLine(fwd.result) });
-    if (mp.ok) de.push({ id: 'mp', label: `CG at MP ${(r.man.xmp * 100).toFixed(1)}%`, color: 'var(--muted)', dash: '5 4', points: deLine(mp.result) });
+    const de: Series[] = [{ id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%`, color: 'var(--s1)', points: deLine(r), hint: 'Elevator angle needed to hold load factor n in a steady pull-up at the current CG.' }];
+    if (fwd.ok) de.push({ id: 'fwd', label: `CG ${(fwd.result.inputs.xcg * 100).toFixed(1)}% (fwd)`, color: 'var(--s3)', points: deLine(fwd.result), hint: 'Same with the CG 10% MAC further forward: a steeper slope (more elevator per g).' });
+    if (mp.ok) de.push({ id: 'mp', label: `CG at MP ${(r.man.xmp * 100).toFixed(1)}%`, color: 'var(--muted)', dash: '5 4', points: deLine(mp.result), hint: 'CG at the maneuver point: zero elevator per g, the boundary of maneuver stability.' });
     const h = r.man.handling;
-    const fs: Series[] = [{ id: 'fs', label: 'Stick force (trimmed at 1 g)', color: 'var(--s1)', points: ns.map((n) => [n, r.man.stickForcePerG * (n - 1)]) }];
+    const fs: Series[] = [{ id: 'fs', label: 'Stick force (trimmed at 1 g)', color: 'var(--s1)', points: ns.map((n) => [n, r.man.stickForcePerG * (n - 1)]), hint: 'Pull force vs load factor, with the 1 g force trimmed out. Slope = stick force per g.' }];
     const nl = r.inputs.limitLoadFactor;
     const band = [[1, 0], [nl, h.min * (nl - 1)], [nl, h.max * (nl - 1)], [1, 0]] as [number, number][];
     const bandLo = [[0, 0], [1, 0], [0, -h.max], [0, -h.min]] as [number, number][];
@@ -158,6 +168,7 @@ export default function App() {
           <button className="btn ghost" onClick={() => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'auto' : 'dark')} title="Theme">
             {theme === 'auto' ? 'Theme: auto' : theme === 'dark' ? 'Theme: dark' : 'Theme: light'}
           </button>
+          <button className="btn" onClick={() => setHelp({ open: true })} data-tip="User guide, formulas and glossary (shortcut: ?)">Help</button>
           <button className="btn" onClick={exportMat}>Export .MAT</button>
           <button className="btn" onClick={() => window.print()}>Export PDF</button>
         </div>
@@ -176,7 +187,7 @@ export default function App() {
       <div className="layout">
         <Sidebar inp={inp} set={set} onReset={() => setInp(DEFAULT_INPUTS)} />
         <main className="canvas">
-          <MarginGauge r={r} />
+          <MarginGauge r={r} onExplain={() => setHelp({ open: true, section: 'points' })} />
           <div className="row2">
             <section className="panel">
               <Schematic r={r} onChange={set} />
@@ -191,7 +202,7 @@ export default function App() {
                 <button className="btn primary" onClick={pulse}>Pulse elevator</button>
               </div>
               {graph === 'cm' && (
-                <LineChart ariaLabel="Cm versus alpha" title="Pitching moment vs angle of attack" series={cmData}
+                <LineChart ariaLabel="Cm versus alpha" title="Pitching moment vs angle of attack" series={cmData} hint="FR-2.1: C_m = C_m0 + C_L(x_cg − x_ac) − V_h η C_Lt. Negative slope = statically stable; the trim point is where the trimmed line crosses C_m = 0." 
                   xLabel="α [deg]" yLabel="C_m" xUnit="°" height={330}
                   markers={[{ x: r.stat.trim.alpha / DEG, y: 0, label: `trim α ${(r.stat.trim.alpha / DEG).toFixed(2)}°`, color: 'var(--s2)' }]}
                   caption={<>Slope C<sub>mα</sub> = {r.aero.Cma.toFixed(3)} /rad ({r.aero.Cma < 0 ? 'negative, stable' : 'positive, unstable'}). Drag the CG on the schematic or the slider to watch it rotate through the neutral line.</>} />
@@ -210,16 +221,16 @@ export default function App() {
                 <div className="twin">
                   <LineChart ariaLabel="Short period alpha response" title="Δα(t): short period" height={300}
                     series={[
-                      { id: 'a', label: 'Δα', color: 'var(--s1)', points: th.alpha },
-                      { id: 'q', label: 'Δq [deg/s]', color: 'var(--s3)', points: th.q, width: 1.5 },
-                      { id: 'de', label: 'δe input', color: 'var(--muted)', dash: '4 3', points: th.de },
+                      { id: 'a', label: 'Δα', color: 'var(--s1)', points: th.alpha, hint: 'Change in angle of attack (deg): the short-period response, which dies out within a few seconds.' },
+                      { id: 'q', label: 'Δq [deg/s]', color: 'var(--s3)', points: th.q, width: 1.5, hint: 'Pitch rate perturbation (deg/s).' },
+                      { id: 'de', label: 'δe input', color: 'var(--muted)', dash: '4 3', points: th.de, hint: 'Elevator pulse applied at t = 0.5 s (deg). Negative = trailing edge up (nose-up).' },
                     ]}
                     xLabel="t [s]" yLabel="deg" xUnit=" s" xDomain={[0, 15]} reveal={Math.min(tNow / 15, 1)} />
                   <div className="stack">
-                    <LineChart ariaLabel="Phugoid speed response" title="Δu(t): phugoid" height={146}
+                    <LineChart ariaLabel="Phugoid speed response" title="Δu(t): phugoid" hint="Airspeed perturbation (m/s). The phugoid trades speed for height with a period of tens of seconds." height={146}
                       series={[{ id: 'u', label: 'Δu', color: 'var(--s2)', points: th.u }]}
                       xLabel="t [s]" yLabel="m/s" xUnit=" s" yUnit=" m/s" xDomain={[0, SIM_T]} reveal={reveal} />
-                    <LineChart ariaLabel="Phugoid altitude response" title="Δh(t): altitude exchange" height={146}
+                    <LineChart ariaLabel="Phugoid altitude response" title="Δh(t): altitude exchange" hint="Altitude perturbation (m), integrated from ḣ = u₀Δθ − Δw. Its peaks lag the speed troughs by a quarter period." height={146}
                       series={[{ id: 'h', label: 'Δh', color: 'var(--s7)', points: th.h }]}
                       xLabel="t [s]" yLabel="m" xUnit=" s" yUnit=" m" xDomain={[0, SIM_T]} reveal={reveal} />
                   </div>
@@ -235,10 +246,10 @@ export default function App() {
           <section className="panel">
             <div className="panel-title">Flight test: elevator deflection and stick force vs load factor<Hint text="Steady pull-up at constant speed. Left: elevator angle needed per load factor; the slope dδe/dn shrinks to zero as the CG approaches the maneuver point (MP). Right: stick force with the trim tab nulling the 1 g force; the green band is the acceptable stick-force-per-g range." /></div>
             <div className="twin even">
-              <LineChart ariaLabel="Elevator versus load factor" title="δe vs n (slope = stick-fixed maneuver margin)" series={ftData.de}
+              <LineChart ariaLabel="Elevator versus load factor" title="δe vs n (slope = stick-fixed maneuver margin)" series={ftData.de} hint="FR-4.1: dδe/dn = −(C_mα C_W + C_Lα C_mq ĝ)/(C_Lα C_mδe − C_Lδe C_mα). Zero slope at the maneuver point." 
                 xLabel="Load factor n [g]" yLabel="δe [deg]" xUnit=" g" yUnit="°" height={250}
                 vRefs={[{ x: 1, label: '1 g' }]} />
-              <LineChart ariaLabel="Stick force versus load factor" title="F_s vs n (handling band shaded)" series={ftData.fs}
+              <LineChart ariaLabel="Stick force versus load factor" title="F_s vs n (handling band shaded)" series={ftData.fs} hint="FR-4.2: F_s = G η q S_e c_e C_h with C_h = C_h0 + C_hα α_t + C_hδ δe. The green wedge spans the acceptable stick force per g (13–125 N/g); the red line is the 267 N pull limit." 
                 bands={[{ label: 'band', points: ftData.band, color: 'var(--good)' }]}
                 xLabel="Load factor n [g]" yLabel="F_s [N] (+ pull)" xUnit=" g" yUnit=" N" height={250}
                 hRefs={[{ y: r.man.handling.forceLimit, label: `limit ${r.man.handling.forceLimit} N (60 lbf)`, strong: true }]}
@@ -249,6 +260,7 @@ export default function App() {
       </div>
       <Workspace r={r} latency={latency} />
       <TipLayer />
+      <HelpDialog open={help.open} initial={help.section} onClose={() => setHelp({ open: false })} />
       <footer className="foot">
         Small-disturbance stability-axis model (Nelson / Etkin). Thin airfoil c<sub>m,c/4</sub> = (π/4)(A<sub>2</sub> − A<sub>1</sub>).
         Section c<sub>lα</sub> = 2π. Propeller normal-force and Z<sub>ẇ</sub>, Z<sub>q</sub> terms neglected.

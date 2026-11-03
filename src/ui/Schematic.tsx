@@ -12,6 +12,8 @@
 import { useRef, useState } from 'react';
 import { AircraftInputs, AnalysisResult, DEG, INPUT_BOUNDS, macLeadingEdge, moveEngine, moveWing } from '../engine';
 import { useSize } from './useSize';
+import { Hint } from './Fields';
+import { TERMS } from './glossary';
 
 type Kind = 'wing' | 'wingTip' | 'tail' | 'tailTip' | 'hinge' | 'cg' | 'engine' | 'engineSide';
 
@@ -152,10 +154,10 @@ export function Schematic({ r, onChange }: Props) {
 
   // CG / NP / NP' / MP labels to the left of the planform, de-conflicted vertically
   const labels = [
-    { st: cgSt, text: `CG ${(inp.xcg * 100).toFixed(1)}%`, cls: `mk-cg st-${status}` },
-    { st: npSt, text: `NP ${(r.stat.xnp * 100).toFixed(1)}%`, cls: 'mk-np' },
-    { st: npFreeSt, text: `NP' ${(r.stat.xnpFree * 100).toFixed(1)}%`, cls: 'mk-npf' },
-    { st: mpSt, text: `MP ${(r.man.xmp * 100).toFixed(1)}%`, cls: 'mk-mp' },
+    { st: cgSt, text: `CG ${(inp.xcg * 100).toFixed(1)}%`, cls: `mk-cg st-${status}`, tip: TERMS.CG },
+    { st: npSt, text: `NP ${(r.stat.xnp * 100).toFixed(1)}%`, cls: 'mk-np', tip: TERMS.NP },
+    { st: npFreeSt, text: `NP' ${(r.stat.xnpFree * 100).toFixed(1)}%`, cls: 'mk-npf', tip: TERMS.NPF },
+    { st: mpSt, text: `MP ${(r.man.xmp * 100).toFixed(1)}%`, cls: 'mk-mp', tip: TERMS.MP },
   ].sort((a, b) => a.st - b.st);
   let lastY = -Infinity;
   const placed = labels.map((l) => {
@@ -169,13 +171,13 @@ export function Schematic({ r, onChange }: Props) {
   return (
     <figure className="chart schematic" aria-label="Aircraft schematic">
       <figcaption className="chart-head">
-        <span className="chart-title">Configuration schematic (drag to edit)</span>
+        <span className="chart-title">Configuration schematic (drag to edit)<Hint text="Top view (nose up) and side view. Drag: the wing body (wing station), the round handle at the wing tip (span and sweep), the tail (tail arm), the tail tip handle (tail size, V_h), the elevator hinge line (elevator chord), the CG symbol, and the engine (station; in the side view also thrust-line height). Hold Shift for fine control." /></span>
         <span className="legend">
-          <span className="legend-item"><span className="sw sw-cg" />CG</span>
-          <span className="legend-item"><span className="sw sw-np" />NP</span>
-          <span className="legend-item"><span className="sw sw-npf" />NP stick-free</span>
-          <span className="legend-item"><span className="sw sw-mp" />Maneuver pt</span>
-          <span className="legend-item"><span className="sw sw-eng" />Engine</span>
+          <span className="legend-item" data-tip={TERMS.CG}><span className="sw sw-cg" />CG</span>
+          <span className="legend-item" data-tip={TERMS.NP}><span className="sw sw-np" />NP</span>
+          <span className="legend-item" data-tip={TERMS.NPF}><span className="sw sw-npf" />NP′ stick-free</span>
+          <span className="legend-item" data-tip={TERMS.MP}><span className="sw sw-mp" />MP maneuver pt</span>
+          <span className="legend-item" data-tip={TERMS.ENGINE}><span className="sw sw-eng" />Engine</span>
         </span>
       </figcaption>
       <div ref={ref} className="chart-body" onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
@@ -186,7 +188,7 @@ export function Schematic({ r, onChange }: Props) {
           </polygon>
           <line x1={SX(halfB / 2)} x2={SX(halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
           <line x1={SX(-halfB / 2)} x2={SX(-halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
-          <text x={SX(halfB / 2) + 6} y={SY(macLe + c / 2)} className="sch-note" dominantBaseline="middle">MAC {c.toFixed(2)} m</text>
+          <text x={SX(halfB / 2) + 6} y={SY(macLe + c / 2)} className="sch-note tip-target" dominantBaseline="middle" data-tip={TERMS.MAC}>MAC {c.toFixed(2)} m</text>
           <polygon points={poly([[tailLe, -hbT], [tailLe, hbT], [tailTe, hbT], [tailTe, -hbT]])}
             className={`sch-tail ${active === 'tail' ? 'is-active' : ''}`} onPointerDown={start('tail')}>
             <title>Drag: tail arm l_t</title>
@@ -199,8 +201,8 @@ export function Schematic({ r, onChange }: Props) {
             <line x1={SX(hbT) + 14} x2={SX(hbT) + 14} y1={SY(wingAcSt)} y2={SY(tailAcSt)} />
             <line x1={SX(hbT) + 9} x2={SX(hbT) + 19} y1={SY(wingAcSt)} y2={SY(wingAcSt)} />
             <line x1={SX(hbT) + 9} x2={SX(hbT) + 19} y1={SY(tailAcSt)} y2={SY(tailAcSt)} />
-            <text x={SX(hbT) + 20} y={SY((wingAcSt + tailAcSt) / 2) + 26}>l_t {inp.tailArm.toFixed(2)} m</text>
-            <text x={SX(hbT) + 20} y={SY((wingAcSt + tailAcSt) / 2) + 40}>V_h {inp.tailVolume.toFixed(2)}</text>
+            <text x={SX(hbT) + 20} y={SY((wingAcSt + tailAcSt) / 2) + 26} className="tip-target" data-tip={TERMS.LT}>l_t {inp.tailArm.toFixed(2)} m</text>
+            <text x={SX(hbT) + 20} y={SY((wingAcSt + tailAcSt) / 2) + 40} className="tip-target" data-tip={TERMS.VH}>V_h {inp.tailVolume.toFixed(2)}</text>
           </g>
           {engY.map((y, k) => (
             <g key={k} className={`sch-engine ${active === 'engine' ? 'is-active' : ''}`} onPointerDown={start('engine')}>
@@ -224,7 +226,7 @@ export function Schematic({ r, onChange }: Props) {
           {placed.map((p) => (
             <g key={p.cls} className={`sch-mark ${p.cls}`}>
               <polyline points={`${rulerX + 6},${SY(p.st)} ${rulerX - 2},${SY(p.st)} ${markX + 2},${p.y}`} fill="none" />
-              <text x={markX} y={p.y} textAnchor="end" dominantBaseline="middle">{p.text}</text>
+              <text x={markX} y={p.y} textAnchor="end" dominantBaseline="middle" data-tip={p.tip} className="tip-target">{p.text}</text>
             </g>
           ))}
           <g className={`sch-cg st-${status} ${active === 'cg' ? 'is-active' : ''}`} onPointerDown={start('cg')}>

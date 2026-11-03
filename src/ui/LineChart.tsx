@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { fmt, linear, niceDomain, ticks } from './scale';
 import { useSize } from './useSize';
+import { Hint } from './Fields';
 
 export interface Series {
   id: string;
@@ -9,6 +10,8 @@ export interface Series {
   points: [number, number][];
   dash?: string;
   width?: number;
+  /** hover hint for the legend entry */
+  hint?: string;
   /** do not include in tooltip */
   quiet?: boolean;
 }
@@ -46,6 +49,8 @@ interface Props {
   /** fraction of the x-domain to reveal (oscilloscope sweep) */
   reveal?: number;
   ariaLabel: string;
+  /** hint for the chart title */
+  hint?: string;
 }
 
 const M = { l: 54, r: 14, t: 10, b: 38 };
@@ -111,11 +116,11 @@ export function LineChart(p: Props) {
     <figure className="chart" aria-label={p.ariaLabel}>
       {(p.title || visibleLegend.length > 1) && (
         <figcaption className="chart-head">
-          {p.title && <span className="chart-title">{p.title}</span>}
+          {p.title && <span className="chart-title">{p.title}{p.hint && <Hint text={p.hint} />}</span>}
           {visibleLegend.length > 1 && (
             <span className="legend">
               {visibleLegend.map((s) => (
-                <span key={s.id} className="legend-item">
+                <span key={s.id} className="legend-item" data-tip={s.hint}>
                   <svg width="18" height="8" aria-hidden>
                     <line x1="1" y1="4" x2="17" y2="4" stroke={s.color} strokeWidth="2" strokeDasharray={s.dash} strokeLinecap="round" />
                   </svg>

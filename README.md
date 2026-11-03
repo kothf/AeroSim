@@ -47,7 +47,7 @@ npm run build    # static bundle in dist/
 
 ## Verification
 
-`npm test` runs 71 tests, including:
+`npm test` runs 72 tests, including:
 
 - thin airfoil results against closed-form integrals for 4-digit sections, and NACA 2412 textbook values;
 - characteristic polynomial and roots of Nelson's Navion longitudinal matrix (short period −2.49 ± 2.60i, phugoid −0.017 ± 0.213i);

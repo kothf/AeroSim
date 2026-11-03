@@ -39,10 +39,10 @@ export function SPlane({ roots, spRoots, locus, xnp, onPickCg, zoom }: Props) {
       <figcaption className="chart-head">
         <span className="chart-title">s-plane: longitudinal poles {zoom === 'phugoid' ? '(phugoid zoom)' : ''}</span>
         <span className="legend">
-          <span className="legend-item"><svg width="12" height="12" aria-hidden><path d="M2 2L10 10M10 2L2 10" stroke="var(--s1)" strokeWidth="2.2" /></svg>Short period</span>
-          <span className="legend-item"><svg width="12" height="12" aria-hidden><path d="M2 2L10 10M10 2L2 10" stroke="var(--s2)" strokeWidth="2.2" /></svg>Phugoid</span>
-          {zoom === 'all' && <span className="legend-item"><svg width="12" height="12" aria-hidden><circle cx="6" cy="6" r="3" fill="var(--seq)" /></svg>CG locus (stable)</span>}
-          {zoom === 'all' && <span className="legend-item"><svg width="12" height="12" aria-hidden><circle cx="6" cy="6" r="3" fill="var(--critical)" /></svg>CG aft of NP</span>}
+          <span className="legend-item" data-tip="Short-period mode: fast, well-damped oscillation in pitch rate and angle of attack at almost constant speed."><svg width="12" height="12" aria-hidden><path d="M2 2L10 10M10 2L2 10" stroke="var(--s1)" strokeWidth="2.2" /></svg>Short period</span>
+          <span className="legend-item" data-tip="Phugoid mode: slow, lightly damped exchange of speed and altitude at almost constant angle of attack."><svg width="12" height="12" aria-hidden><path d="M2 2L10 10M10 2L2 10" stroke="var(--s2)" strokeWidth="2.2" /></svg>Phugoid</span>
+          {zoom === 'all' && <span className="legend-item" data-tip="Root locus: the four poles recomputed for CG positions across the MAC. Click a dot to move the CG there."><svg width="12" height="12" aria-hidden><circle cx="6" cy="6" r="3" fill="var(--seq)" /></svg>CG locus (stable)</span>}
+          {zoom === 'all' && <span className="legend-item" data-tip="Locus points for CG positions aft of the neutral point (statically unstable): a real pole moves into the right half-plane."><svg width="12" height="12" aria-hidden><circle cx="6" cy="6" r="3" fill="var(--critical)" /></svg>CG aft of NP</span>}
         </span>
       </figcaption>
       <div ref={ref} className="chart-body" style={{ height }}>
