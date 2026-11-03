@@ -9,3 +9,5 @@ export * from './simulate';
 export * from './thinAirfoil';
 export * from './wing';
 export * from './matfile';
+export * from './propulsion';
+export * from './installation';

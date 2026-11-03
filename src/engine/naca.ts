@@ -63,7 +63,7 @@ export function parseNaca(raw: string): NacaParseResult {
     const table = reflex ? FIVE_DIGIT_REFLEX[P] : FIVE_DIGIT_NORMAL[P];
     if (!table)
       return { ok: false, error: reflex ? 'Reflexed 5-digit needs 2nd digit 2-5' : '5-digit needs 2nd digit 1-5' };
-    const k21 = 'k21' in table ? table.k21 : 0;
+    const k21 = 'k21' in table ? (table as { k21: number }).k21 : 0;
     return {
       ok: true,
       profile: { series: 5, code, clDesign: 0.15 * L, xf: 0.05 * P, reflex, t, r: table.r, k1: table.k1, k21 },

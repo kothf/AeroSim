@@ -16,6 +16,7 @@ import { classifyModes, LongitudinalModes, shortPeriodApprox, phugoidApprox, Mod
 import { NacaProfile, parseNaca } from './naca';
 import { SectionAero, flapEffectiveness, solveThinAirfoil } from './thinAirfoil';
 import { downwashGradient, liftSlope3D } from './wing';
+import { Propulsion, propulsion } from './propulsion';
 
 /** Pitch-damping fuselage allowance: Nelson suggests ~10% over the tail-only estimate. */
 export const CMQ_FUSELAGE_FACTOR = 1.1;
@@ -40,7 +41,11 @@ export interface AeroDerivatives {
   eps0: number; // downwash at alpha = 0 [rad]
   tau: number; // elevator effectiveness
   CL0: number; // whole aircraft at alpha = 0, delta_e = 0
+  /** total Cm at alpha = 0, delta_e = 0, including the trim thrust-line moment */
   Cm0: number;
+  /** aerodynamic part of Cm0 (wing + tail) */
+  Cm0Aero: number;
+  CmT: number;
   Cma: number;
   CLde: number;
   Cmde: number;
@@ -111,6 +116,7 @@ export interface AnalysisResult {
   stat: StaticStability;
   ss: StateSpace;
   man: Maneuver;
+  prop: Propulsion;
 }
 
 export type AnalysisError = { ok: false; field: 'wingNaca' | 'tailNaca'; error: string };
@@ -142,7 +148,7 @@ export function geometry(inp: AircraftInputs): Geometry {
   };
 }
 
-export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: NacaProfile, geo: Geometry, mach: number): AeroDerivatives {
+export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: NacaProfile, geo: Geometry, mach: number, CmT = 0): AeroDerivatives {
   const wing = solveThinAirfoil(wingP);
   const tail = solveThinAirfoil(tailP);
   const sweep = inp.sweepDeg * DEG;
@@ -164,14 +170,15 @@ export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: 
   const CL0 = CLw0 + eta * St_S * CLt0;
   const CLa = CLaWing + eta * St_S * CLaTail * (1 - deda);
   // FR-2.1: Cm = Cm_ac,w + CL_w (x_cg - x_ac) - V_h eta CL_t
-  const Cm0 = wing.cmC4 + CLw0 * (inp.xcg - xac) - Vh * eta * CLt0;
+  const Cm0Aero = wing.cmC4 + CLw0 * (inp.xcg - xac) - Vh * eta * CLt0;
+  const Cm0 = Cm0Aero + CmT;
   const Cma = CLaWing * (inp.xcg - xac) - Vh * eta * CLaTail * (1 - deda);
   const CLde = eta * St_S * CLaTail * tau;
   const Cmde = -Vh * eta * CLaTail * tau;
   const ltc = inp.tailArm / geo.mac;
   const Cmq = -2 * CMQ_FUSELAGE_FACTOR * eta * CLaTail * Vh * ltc;
   const Cmadot = -2 * eta * CLaTail * Vh * ltc * deda;
-  return { wing, tail, CLaWing, CLaTail, CLa, deda, eps0, tau, CL0, Cm0, Cma, CLde, Cmde, Cmq, Cmadot, xac };
+  return { wing, tail, CLaWing, CLaTail, CLa, deda, eps0, tau, CL0, Cm0, Cm0Aero, CmT, Cma, CLde, Cmde, Cmq, Cmadot, xac };
 }
 
 /** Total pitching moment and lift coefficients at (alpha, delta_e) [rad]. */
@@ -203,7 +210,7 @@ export function staticStability(inp: AircraftInputs, a: AeroDerivatives, f: Flig
 }
 
 /** FR-3.1 longitudinal small-disturbance model (Nelson, stability axes; Z_wdot, Z_q neglected). */
-export function stateSpace(inp: AircraftInputs, a: AeroDerivatives, f: FlightState, geo: Geometry, trimCL: number): StateSpace {
+export function stateSpace(inp: AircraftInputs, a: AeroDerivatives, f: FlightState, geo: Geometry, trimCL: number, dTdu = 0): StateSpace {
   const { u0, qbar: Q, mach } = f;
   const S = inp.wingArea;
   const m = inp.mass;
@@ -217,11 +224,13 @@ export function stateSpace(inp: AircraftInputs, a: AeroDerivatives, f: FlightSta
   const CDu = 0;
   const Cmu = 0;
   const QS = Q * S;
-  const Xu = (-(CDu + 2 * CD) * QS) / (m * u0);
+  // X_u = (dT/du - dD/du)/m with dD/du = (2 C_D + C_Du) q S / u0
+  const Xu = (-(CDu + 2 * CD) * QS) / (m * u0) + dTdu / m;
   const Xw = (-(CDa - CL) * QS) / (m * u0);
   const Zu = (-(CLu + 2 * CL) * QS) / (m * u0);
   const Zw = (-(a.CLa + CD) * QS) / (m * u0);
-  const Mu = (Cmu * QS * cbar) / (u0 * Iy);
+  // thrust line z_T below the CG: dM/du = z_T dT/du
+  const Mu = (Cmu * QS * cbar) / (u0 * Iy) + (inp.thrustLineZ * dTdu) / Iy;
   const Mw = (a.Cma * QS * cbar) / (u0 * Iy);
   const Mwdot = (a.Cmadot * (cbar / (2 * u0)) * QS * cbar) / (u0 * Iy);
   const Mq = (a.Cmq * (cbar / (2 * u0)) * QS * cbar) / Iy;
@@ -282,11 +291,12 @@ export function analyze(raw: AircraftInputs): { ok: true; result: AnalysisResult
   if (!t.ok) return { ok: false, field: 'tailNaca', error: t.error };
   const geo = geometry(inputs);
   const flight = flightState(inputs);
-  const aero = aeroDerivatives(inputs, w.profile, t.profile, geo, flight.mach);
+  const prop = propulsion(inputs, flight.atm.altitude, flight.u0, geo.mac);
+  const aero = aeroDerivatives(inputs, w.profile, t.profile, geo, flight.mach, prop.CmT);
   const stat = staticStability(inputs, aero, flight);
-  const ss = stateSpace(inputs, aero, flight, geo, flight.CW);
+  const ss = stateSpace(inputs, aero, flight, geo, flight.CW, prop.dTdu);
   const man = maneuver(inputs, aero, flight, geo, stat);
-  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man } };
+  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man, prop } };
 }
 
 /** Root locus of the longitudinal poles as the CG is swept across the MAC. */
@@ -298,11 +308,12 @@ export function cgRootLocus(inp: AircraftInputs, from = 0.05, to = 0.6, steps = 
   const base = clampInputs(inp);
   const geo = geometry(base);
   const f = flightState(base);
+  const prop = propulsion(base, f.atm.altitude, f.u0, geo.mac);
   for (let i = 0; i <= steps; i++) {
     const xcg = from + ((to - from) * i) / steps;
     const ii = { ...base, xcg };
-    const a = aeroDerivatives(ii, w.profile, t.profile, geo, f.mach);
-    out.push({ xcg, roots: stateSpace(ii, a, f, geo, f.CW).eigenvalues });
+    const a = aeroDerivatives(ii, w.profile, t.profile, geo, f.mach, prop.CmT);
+    out.push({ xcg, roots: stateSpace(ii, a, f, geo, f.CW, prop.dTdu).eigenvalues });
   }
   return out;
 }
