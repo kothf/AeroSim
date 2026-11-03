@@ -162,7 +162,7 @@ export default function App() {
           <span className="logo" aria-hidden>
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M2 13l8-1 4-8h2l-2 8 6-.5 2-2.5h1.5l-1 4 1 4H22l-2-2.5-6-.5 2 8h-2l-4-8-8-1z" fill="currentColor" /></svg>
           </span>
-          <h1>AeroSim Analytics <span>// Flight Mechanics II Engine</span></h1>
+          <h1>AeroSim Analytics <span className="version" data-tip="App version (from package.json)">v{__APP_VERSION__}</span> <span>// Flight Mechanics II Engine</span></h1>
         </div>
         <div className="actions">
           <button className="btn ghost" onClick={() => setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'auto' : 'dark')} title="Theme">
