@@ -16,6 +16,10 @@ npm test         # engine unit tests (vitest)
 npm run build    # static bundle in dist/
 ```
 
+## Release
+
+Every merge to `main` is released automatically (`.github/workflows/release.yml`): bump `version` in `package.json` in the PR, or the workflow bumps the patch itself. It runs the tests, publishes `aerosim-<version>.tar.gz` as a GitHub release tagged on `main`, and asks aerocat.tech to update; the site's vendor-update PR merges itself once its CI passes and the NUC deploys it to <https://aerocat.tech/tools/aerosim/>.
+
 ## What it computes
 
 | Module | Requirement | Implementation (`src/engine`) |
