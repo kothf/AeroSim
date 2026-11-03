@@ -10,9 +10,9 @@ const clamp = (k: keyof AircraftInputs, v: number) => {
   return b ? Math.min(Math.max(v, b[0]), b[1]) : v;
 };
 
-/** Fuselage station of the MAC leading edge (constant-chord wing: MAC at mid semi-span). */
+/** Fuselage station of the MAC leading edge (MAC at y_mac, leading edge swept by Λ_LE). */
 export function macLeadingEdge(inp: AircraftInputs, geo: Geometry): number {
-  return inp.wingStation + (geo.span / 4) * Math.tan((inp.sweepDeg * Math.PI) / 180);
+  return inp.wingStation + geo.yMac * Math.tan(geo.sweepLE);
 }
 
 export function cgStation(inp: AircraftInputs, geo: Geometry): number {

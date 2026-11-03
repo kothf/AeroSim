@@ -24,6 +24,15 @@ export const CMQ_FUSELAGE_FACTOR = 1.1;
 export interface Geometry {
   span: number;
   mac: number;
+  /** trapezoidal wing planform */
+  rootChord: number;
+  tipChord: number;
+  /** spanwise station of the MAC from the centreline [m] */
+  yMac: number;
+  /** leading-edge sweep [rad] (input sweep is at the quarter chord) */
+  sweepLE: number;
+  /** fuselage station of the MAC leading edge [m] */
+  macLe: number;
   tailArea: number;
   tailSpan: number;
   tailChord: number;
@@ -106,6 +115,33 @@ export interface FlightState {
   CW: number; // weight coefficient W / (q S) cos(gamma)
 }
 
+/**
+ * Reference points along the fuselage. Positions are fractions of MAC (aft of the MAC LE) and
+ * stations in metres aft of the nose.
+ */
+export interface ReferencePoints {
+  /** wing aerodynamic centre (section/wing alone) */
+  acWing: number;
+  /** wing-body aerodynamic centre (with the fuselage shift) */
+  acWingBody: number;
+  /** whole-aircraft aerodynamic centre = stick-fixed neutral point */
+  acAircraft: number;
+  /** wing centre of pressure at the trim condition (null when the wing lift is ~0) */
+  cpWing: number | null;
+  /** centre of pressure of the total aerodynamic force (wing + tail + body) at trim */
+  cpAircraft: number | null;
+  /** wing lift coefficient at trim */
+  CLwTrim: number;
+  stations: {
+    macLe: number; macTe: number; cg: number; acWing: number; acWingBody: number; acAircraft: number;
+    cpWing: number | null; cpAircraft: number | null; tailAc: number; tailLe: number; tailTe: number;
+  };
+  /** overall length (nose to the furthest aft point of fuselage or tail) */
+  overallLength: number;
+  /** station of the wing tip leading edge */
+  tipLe: number;
+}
+
 export interface AnalysisResult {
   inputs: AircraftInputs;
   wingProfile: NacaProfile;
@@ -117,6 +153,7 @@ export interface AnalysisResult {
   ss: StateSpace;
   man: Maneuver;
   prop: Propulsion;
+  points: ReferencePoints;
 }
 
 export type AnalysisError = { ok: false; field: 'wingNaca' | 'tailNaca'; error: string };
@@ -140,12 +177,18 @@ export function flightState(inp: AircraftInputs): FlightState {
 
 export function geometry(inp: AircraftInputs): Geometry {
   const span = Math.sqrt(inp.aspectRatio * inp.wingArea);
-  const mac = inp.wingArea / span;
+  const lam = inp.taperRatio;
+  const rootChord = (2 * inp.wingArea) / (span * (1 + lam));
+  const tipChord = lam * rootChord;
+  const mac = (2 / 3) * rootChord * ((1 + lam + lam * lam) / (1 + lam));
+  const yMac = (span / 6) * ((1 + 2 * lam) / (1 + lam));
+  const sweepLE = Math.atan(Math.tan(inp.sweepDeg * DEG) + (1 / inp.aspectRatio) * ((1 - lam) / (1 + lam)));
+  const macLe = inp.wingStation + yMac * Math.tan(sweepLE);
   const tailArea = (inp.tailVolume * inp.wingArea * mac) / inp.tailArm;
   const tailSpan = Math.sqrt(inp.tailAspectRatio * tailArea);
   const tailChord = tailArea / tailSpan;
   return {
-    span, mac, tailArea, tailSpan, tailChord,
+    span, mac, rootChord, tipChord, yMac, sweepLE, macLe, tailArea, tailSpan, tailChord,
     elevatorArea: inp.elevatorChordRatio * tailArea,
     elevatorChord: inp.elevatorChordRatio * tailChord,
   };
@@ -287,6 +330,32 @@ export function maneuver(inp: AircraftInputs, a: AeroDerivatives, f: FlightState
   };
 }
 
+export function referencePoints(inp: AircraftInputs, geo: Geometry, a: AeroDerivatives, st: StaticStability): ReferencePoints {
+  const c = geo.mac;
+  const at = (x: number) => geo.macLe + x * c;
+  // Wing alone: C_m,ac about the AC, so x_cp = x_ac - C_m,ac / C_L,w
+  const CLwTrim = a.CLaWing * (st.trim.alpha - a.wing.alpha0);
+  const cpWing = Math.abs(CLwTrim) > 0.02 ? inp.xacWing - a.wing.cmC4 / CLwTrim : null;
+  // Whole aircraft: trimmed, so the aerodynamic moment about the CG balances the thrust moment C_m,T
+  const CL = st.trim.CL;
+  const cpAircraft = Math.abs(CL) > 0.02 ? inp.xcg + a.CmT / CL : null;
+  const acWing = inp.xacWing;
+  const tailAc = at(acWing) + inp.tailArm;
+  const tailLe = tailAc - 0.25 * geo.tailChord;
+  const tailTe = tailLe + geo.tailChord;
+  const tipLe = inp.wingStation + (geo.span / 2) * Math.tan(geo.sweepLE);
+  return {
+    acWing, acWingBody: a.xac, acAircraft: st.xnp, cpWing, cpAircraft, CLwTrim,
+    stations: {
+      macLe: geo.macLe, macTe: at(1), cg: at(inp.xcg), acWing: at(acWing), acWingBody: at(a.xac), acAircraft: at(st.xnp),
+      cpWing: cpWing === null ? null : at(cpWing), cpAircraft: cpAircraft === null ? null : at(cpAircraft),
+      tailAc, tailLe, tailTe,
+    },
+    overallLength: Math.max(inp.fuselageLength, tailTe, tipLe + geo.tipChord, inp.wingStation + geo.rootChord),
+    tipLe,
+  };
+}
+
 export function analyze(raw: AircraftInputs): { ok: true; result: AnalysisResult } | AnalysisError {
   const inputs = clampInputs(raw);
   const w = parseNaca(inputs.wingNaca);
@@ -300,7 +369,8 @@ export function analyze(raw: AircraftInputs): { ok: true; result: AnalysisResult
   const stat = staticStability(inputs, aero, flight);
   const ss = stateSpace(inputs, aero, flight, geo, flight.CW, prop.dTdu);
   const man = maneuver(inputs, aero, flight, geo, stat);
-  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man, prop } };
+  const points = referencePoints(inputs, geo, aero, stat);
+  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man, prop, points } };
 }
 
 /** Root locus of the longitudinal poles as the CG is swept across the MAC. */

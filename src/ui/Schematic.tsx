@@ -28,7 +28,7 @@ const clamp = (k: keyof AircraftInputs, v: number) => {
 };
 
 const TOP_H_MAX = 420;
-const SIDE_H = 150;
+const SIDE_H = 180;
 
 export function Schematic({ r, onChange }: Props) {
   const [ref, size] = useSize<HTMLDivElement>();
@@ -38,26 +38,29 @@ export function Schematic({ r, onChange }: Props) {
   const geo = r.geometry;
   const c = geo.mac;
   const halfB = geo.span / 2;
-  const sweep = inp.sweepDeg * DEG;
+    const pts = r.points;
   const macLe = macLeadingEdge(inp, geo);
   const wingAcSt = macLe + inp.xacWing * c;
   const tailAcSt = wingAcSt + inp.tailArm;
   const tailLe = tailAcSt - 0.25 * geo.tailChord;
   const tailTe = tailLe + geo.tailChord;
   const cgSt = macLe + inp.xcg * c;
+  const cr = geo.rootChord;
+  const ct = geo.tipChord;
   const npSt = macLe + r.stat.xnp * c;
   const npFreeSt = macLe + r.stat.xnpFree * c;
   const mpSt = macLe + r.man.xmp * c;
   const fusL = Math.max(inp.fuselageLength, tailTe + 0.2);
-  const tipLe = inp.wingStation + halfB * Math.tan(sweep);
+  const tipLe = pts.tipLe;
   const hbT = geo.tailSpan / 2;
   const hingeSt = tailTe - geo.elevatorChord;
-  const fusW = Math.max(0.55, c * 0.45) / 2;
+  const fusW = inp.fuselageDiameter / 2;
+  const overallL = pts.overallLength;
 
   // ---- top view: fuselage station runs down the screen, span runs across
   const width = Math.max(size.width, 300);
   const labelGutter = 110;
-  const worldLen = Math.max(fusL, tipLe + c, tailTe) + 0.3;
+  const worldLen = Math.max(fusL, tipLe + ct, tailTe) + 0.3;
   const worldSpan = 2 * Math.max(halfB, hbT) + 0.4;
   const s = Math.min((width - 2 * labelGutter) / worldSpan, (TOP_H_MAX - 30) / worldLen);
   const TOP_H = Math.ceil(worldLen * s + 30);
@@ -69,9 +72,9 @@ export function Schematic({ r, onChange }: Props) {
   const poly = (a: [number, number][]) => a.map(([x, y]) => P(x, y)).join(' ');
 
   // ---- side view: station runs across, z (down positive) runs down
-  const sSide = Math.min((width - 40) / (fusL + 0.6), 60);
+  const sSide = Math.min((width - 40) / (fusL + 0.6), 60, (SIDE_H - 90) / (fusW * 5.2));
   const sideLeft = 20 + Math.max(0, (width - 40 - sSide * (fusL + 0.6)) / 2) + 0.3 * sSide;
-  const zc = SIDE_H / 2 + 10;
+  const zc = SIDE_H / 2 - 6;
   const QX = (x: number) => sideLeft + x * sSide;
   const QZ = (z: number) => zc + z * sSide;
 
@@ -141,10 +144,12 @@ export function Schematic({ r, onChange }: Props) {
   };
 
   const wingPoly: [number, number][] = [
-    [inp.wingStation, 0], [tipLe, halfB], [tipLe + c, halfB], [inp.wingStation + c, 0], [tipLe + c, -halfB], [tipLe, -halfB],
+    [inp.wingStation, 0], [tipLe, halfB], [tipLe + ct, halfB], [inp.wingStation + cr, 0], [tipLe + ct, -halfB], [tipLe, -halfB],
   ];
-  const fusPath = `M${P(0, 0)} C${P(0.3, fusW)} ${P(1.0, fusW)} ${P(1.8, fusW)} L${P(fusL * 0.55, fusW)} L${P(fusL, fusW * 0.25)}
-    L${P(fusL, -fusW * 0.25)} L${P(fusL * 0.55, -fusW)} L${P(1.8, -fusW)} C${P(1.0, -fusW)} ${P(0.3, -fusW)} ${P(0, 0)}Z`;
+  // nose/tail-cone blend lengths scale with the body diameter
+  const noseL = Math.min(fusW * 3, fusL * 0.25);
+  const fusPath = `M${P(0, 0)} C${P(noseL * 0.15, fusW)} ${P(noseL * 0.55, fusW)} ${P(noseL, fusW)} L${P(fusL * 0.55, fusW)} L${P(fusL, fusW * 0.25)}
+    L${P(fusL, -fusW * 0.25)} L${P(fusL * 0.55, -fusW)} L${P(noseL, -fusW)} C${P(noseL * 0.55, -fusW)} ${P(noseL * 0.15, -fusW)} ${P(0, 0)}Z`;
   const status = r.stat.status;
   const engY = inp.engineCount === 2 ? [halfB * 0.35, -halfB * 0.35] : [0];
   // MAC ruler in the left gutter (same vertical scale as the planform) carries the labels,
@@ -153,12 +158,17 @@ export function Schematic({ r, onChange }: Props) {
   const markX = rulerX - 8;
 
   // CG / NP / NP' / MP labels to the left of the planform, de-conflicted vertically
+  const pctOf = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const viewMin = -0.2, viewMax = worldLen;
   const labels = [
-    { st: cgSt, text: `CG ${(inp.xcg * 100).toFixed(1)}%`, cls: `mk-cg st-${status}`, tip: TERMS.CG },
-    { st: npSt, text: `NP ${(r.stat.xnp * 100).toFixed(1)}%`, cls: 'mk-np', tip: TERMS.NP },
-    { st: npFreeSt, text: `NP' ${(r.stat.xnpFree * 100).toFixed(1)}%`, cls: 'mk-npf', tip: TERMS.NPF },
-    { st: mpSt, text: `MP ${(r.man.xmp * 100).toFixed(1)}%`, cls: 'mk-mp', tip: TERMS.MP },
-  ].sort((a, b) => a.st - b.st);
+    { st: cgSt, text: `CG ${pctOf(inp.xcg)}`, cls: `mk-cg st-${status}`, tip: TERMS.CG },
+    { st: npSt, text: `NP = AC ${pctOf(r.stat.xnp)}`, cls: 'mk-np', tip: `${TERMS.NP} ${TERMS.AC_AIRCRAFT}` },
+    { st: npFreeSt, text: `NP' ${pctOf(r.stat.xnpFree)}`, cls: 'mk-npf', tip: TERMS.NPF },
+    { st: mpSt, text: `MP ${pctOf(r.man.xmp)}`, cls: 'mk-mp', tip: TERMS.MP },
+    { st: pts.stations.acWingBody, text: `AC wb ${pctOf(pts.acWingBody)}`, cls: 'mk-ac', tip: TERMS.AC },
+    ...(pts.cpWing !== null ? [{ st: pts.stations.cpWing!, text: `CP wing ${pctOf(pts.cpWing)}`, cls: 'mk-cpw', tip: TERMS.CP_WING }] : []),
+    ...(pts.cpAircraft !== null ? [{ st: pts.stations.cpAircraft!, text: `CP ${pctOf(pts.cpAircraft)}`, cls: 'mk-cp', tip: TERMS.CP }] : []),
+  ].map((l) => ({ ...l, st: Math.min(Math.max(l.st, viewMin), viewMax) })).sort((a, b) => a.st - b.st);
   let lastY = -Infinity;
   const placed = labels.map((l) => {
     const y = Math.max(SY(l.st), lastY + 13);
@@ -177,6 +187,8 @@ export function Schematic({ r, onChange }: Props) {
           <span className="legend-item" data-tip={TERMS.NP}><span className="sw sw-np" />NP</span>
           <span className="legend-item" data-tip={TERMS.NPF}><span className="sw sw-npf" />NP′ stick-free</span>
           <span className="legend-item" data-tip={TERMS.MP}><span className="sw sw-mp" />MP maneuver pt</span>
+          <span className="legend-item" data-tip={TERMS.AC}><span className="sw sw-ac" />AC</span>
+          <span className="legend-item" data-tip={TERMS.CP}><span className="sw sw-cp" />CP</span>
           <span className="legend-item" data-tip={TERMS.ENGINE}><span className="sw sw-eng" />Engine</span>
         </span>
       </figcaption>
@@ -186,9 +198,9 @@ export function Schematic({ r, onChange }: Props) {
           <polygon points={poly(wingPoly)} className={`sch-wing ${active === 'wing' ? 'is-active' : ''}`} onPointerDown={start('wing')}>
             <title>Drag: wing station along the fuselage</title>
           </polygon>
-          <line x1={SX(halfB / 2)} x2={SX(halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
-          <line x1={SX(-halfB / 2)} x2={SX(-halfB / 2)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
-          <text x={SX(halfB / 2) + 6} y={SY(macLe + c / 2)} className="sch-note tip-target" dominantBaseline="middle" data-tip={TERMS.MAC}>MAC {c.toFixed(2)} m</text>
+          <line x1={SX(geo.yMac)} x2={SX(geo.yMac)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
+          <line x1={SX(-geo.yMac)} x2={SX(-geo.yMac)} y1={SY(macLe)} y2={SY(macLe + c)} className="sch-mac" />
+          <text x={SX(geo.yMac) + 6} y={SY(macLe + c / 2)} className="sch-note tip-target" dominantBaseline="middle" data-tip={TERMS.MAC}>MAC {c.toFixed(2)} m</text>
           <polygon points={poly([[tailLe, -hbT], [tailLe, hbT], [tailTe, hbT], [tailTe, -hbT]])}
             className={`sch-tail ${active === 'tail' ? 'is-active' : ''}`} onPointerDown={start('tail')}>
             <title>Drag: tail arm l_t</title>
@@ -235,7 +247,7 @@ export function Schematic({ r, onChange }: Props) {
             <path d={`M${cx},${SY(cgSt) - 9} A9,9 0 0 1 ${cx + 9},${SY(cgSt)} L${cx},${SY(cgSt)}Z M${cx},${SY(cgSt) + 9} A9,9 0 0 1 ${cx - 9},${SY(cgSt)} L${cx},${SY(cgSt)}Z`} className="cg-quads" />
             <title>Drag: CG position</title>
           </g>
-          <circle cx={SX(halfB)} cy={SY(tipLe + c / 2)} r={8}
+          <circle cx={SX(halfB)} cy={SY(tipLe + ct / 2)} r={8}
             className={`sch-handle ${active === 'wingTip' ? 'is-active' : ''}`} onPointerDown={start('wingTip')}>
             <title>Drag: span (left/right) and sweep (up/down)</title>
           </circle>
@@ -252,6 +264,26 @@ export function Schematic({ r, onChange }: Props) {
           <line x1={QX(tailLe)} x2={QX(tailTe)} y1={QZ(-fusW * 0.9)} y2={QZ(-fusW * 0.9)} className="sch-wing-side tail" />
           <path d={`M${QX(tailLe - 0.2)},${QZ(-fusW)} L${QX(tailTe - 0.25)},${QZ(-fusW * 3.4)} L${QX(tailTe)},${QZ(-fusW * 3.4)} L${QX(tailTe)},${QZ(-fusW)}Z`} className="sch-fin" />
           <line x1={QX(0)} x2={QX(fusL)} y1={QZ(0)} y2={QZ(0)} className="sch-ref-line" />
+          <g className="sch-dim">
+            <line x1={QX(0)} x2={QX(overallL)} y1={SIDE_H - 30} y2={SIDE_H - 30} />
+            <line x1={QX(0)} x2={QX(0)} y1={SIDE_H - 35} y2={SIDE_H - 25} />
+            <line x1={QX(overallL)} x2={QX(overallL)} y1={SIDE_H - 35} y2={SIDE_H - 25} />
+            <text x={QX(overallL / 2)} y={SIDE_H - 18} textAnchor="middle" className="tip-target" data-tip={TERMS.LENGTH}>overall length {overallL.toFixed(2)} m</text>
+            <line x1={QX(0) - 8} x2={QX(0) - 8} y1={QZ(-fusW)} y2={QZ(fusW)} />
+            <text x={QX(0) - 11} y={QZ(0)} textAnchor="end" dominantBaseline="middle" className="tip-target" data-tip="Fuselage diameter (maximum width/height).">⌀{inp.fuselageDiameter.toFixed(2)}</text>
+          </g>
+          {pts.stations.cpAircraft !== null && (
+            <g className="sch-force lift" data-tip={TERMS.CP}>
+              <line x1={QX(pts.stations.cpAircraft)} x2={QX(pts.stations.cpAircraft)} y1={QZ(0)} y2={QZ(-fusW) - 26} />
+              <path d={`M${QX(pts.stations.cpAircraft)},${QZ(-fusW) - 32} l-5,8 h10z`} />
+              <text x={QX(pts.stations.cpAircraft) + 6} y={QZ(-fusW) - 26} className="sch-note">L @ CP</text>
+            </g>
+          )}
+          <g className="sch-force weight" data-tip={TERMS.CG}>
+            <line x1={QX(cgSt)} x2={QX(cgSt)} y1={QZ(0)} y2={QZ(fusW) + 18} />
+            <path d={`M${QX(cgSt)},${QZ(fusW) + 24} l-5,-8 h10z`} />
+            <text x={QX(cgSt) - 6} y={QZ(fusW) + 22} textAnchor="end" className="sch-note">W @ CG</text>
+          </g>
           <line x1={QX(Math.min(inp.engineStation, cgSt) - 0.6)} x2={QX(Math.max(inp.engineStation, cgSt) + 0.6)} y1={QZ(inp.thrustLineZ)} y2={QZ(inp.thrustLineZ)} className="sch-thrust" />
           <path d={`M${QX(inp.engineStation) - 30},${QZ(inp.thrustLineZ)} l10,-5 v10z`} className="sch-arrow" />
           <g className={`sch-engine ${active === 'engineSide' ? 'is-active' : ''}`} onPointerDown={start('engineSide')}>
@@ -263,13 +295,13 @@ export function Schematic({ r, onChange }: Props) {
             <circle cx={QX(cgSt)} cy={QZ(0)} r={7} className="cg-disc" />
             <path d={`M${QX(cgSt)},${QZ(0) - 7} A7,7 0 0 1 ${QX(cgSt) + 7},${QZ(0)} L${QX(cgSt)},${QZ(0)}Z M${QX(cgSt)},${QZ(0) + 7} A7,7 0 0 1 ${QX(cgSt) - 7},${QZ(0)} L${QX(cgSt)},${QZ(0)}Z`} className="cg-quads" />
           </g>
-          <text x={width - 6} y={SIDE_H - 8} textAnchor="end" className="sch-note">
+          <text x={width - 6} y={14} textAnchor="end" className="sch-note">
             T = {(r.prop.thrustRequired / 1000).toFixed(2)} kN · z_T = {inp.thrustLineZ.toFixed(2)} m {inp.thrustLineZ > 0 ? '(below CG: nose-up)' : inp.thrustLineZ < 0 ? '(above CG: nose-down)' : '(through CG)'}
           </text>
         </svg>
       </div>
       <div className="chart-caption">
-        Wing root LE {inp.wingStation.toFixed(2)} m · span {geo.span.toFixed(2)} m (AR {inp.aspectRatio.toFixed(1)}) · sweep {inp.sweepDeg.toFixed(1)}° ·
+        Length {overallL.toFixed(2)} m · wing root LE {inp.wingStation.toFixed(2)} m · span {geo.span.toFixed(2)} m (AR {inp.aspectRatio.toFixed(1)}, λ {inp.taperRatio.toFixed(2)}) · chords {cr.toFixed(2)}/{ct.toFixed(2)} m · sweep c/4 {inp.sweepDeg.toFixed(1)}° ·
         tail {geo.tailArea.toFixed(2)} m² · elevator {(inp.elevatorChordRatio * 100).toFixed(0)}% chord · engine {inp.engineStation.toFixed(2)} m ({inp.engineMass.toFixed(0)} kg).
         Moving the wing keeps the CG fixed in the airframe; moving the engine moves the CG. Hold Shift while dragging for fine control.
       </div>

@@ -38,13 +38,22 @@ export function Sidebar({ inp, set, onReset }: Props) {
       </section>
 
       <section className="group">
+        <h3>Fuselage &amp; layout</h3>
+        <div className="params">
+          {num('fuselageLength')}
+          {num('fuselageDiameter')}
+          {num('wingStation')}
+        </div>
+      </section>
+
+      <section className="group">
         <h3>Main wing profile</h3>
         <NacaField label="Wing section" hint="NACA 4-digit (e.g. 4415: 4% camber at 40% chord, 15% thick) or 5-digit (e.g. 23012) code. Thin airfoil theory gives the zero-lift angle α₀ and the moment c_m,c/4 from the camber line." value={inp.wingNaca} onChange={(v) => set({ wingNaca: v })} />
         <div className="params">
           {num('aspectRatio')}
           {num('sweepDeg')}
+          {num('taperRatio')}
           {num('wingArea')}
-          {num('wingStation')}
           {num('xacWing')}
           {num('fuselageXacShift')}
           {num('cd0')}
@@ -114,7 +123,6 @@ export function Sidebar({ inp, set, onReset }: Props) {
           {num('altitudeFt')}
           {num('flightPathDeg')}
           {num('limitLoadFactor')}
-          {num('fuselageLength')}
         </div>
       </section>
     </aside>

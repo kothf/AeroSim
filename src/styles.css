@@ -202,6 +202,13 @@ select { border: 1px solid var(--border); border-radius: 5px; background: var(--
 .mk-np polyline { stroke: var(--s2); } .mk-np text { fill: var(--s2); }
 .mk-npf polyline { stroke: var(--serious); } .mk-npf text { fill: var(--serious); }
 .mk-mp polyline { stroke: var(--s7); } .mk-mp text { fill: var(--s7); }
+.mk-ac polyline { stroke: var(--s3); } .mk-ac text { fill: var(--s3); }
+.mk-cp polyline { stroke: var(--s1); } .mk-cp text { fill: var(--s1); }
+.mk-cpw polyline { stroke: var(--muted); stroke-dasharray: 3 2; } .mk-cpw text { fill: var(--muted); }
+.sch-tick.mk-ac { stroke: var(--s3); } .sch-tick.mk-cp { stroke: var(--s1); } .sch-tick.mk-cpw { stroke: var(--muted); }
+.sw-ac { background: var(--s3); } .sw-cp { background: var(--s1); }
+.sch-force line { stroke-width: 1.5; } .sch-force.lift line { stroke: var(--s1); } .sch-force.lift path { fill: var(--s1); }
+.sch-force.weight line { stroke: var(--text-2); } .sch-force.weight path { fill: var(--text-2); }
 .sch-cg { cursor: ew-resize; }
 .sch-cg line { stroke: var(--text); stroke-width: 1.5; }
 .cg-disc { fill: var(--surface); stroke: var(--text); stroke-width: 2; }
@@ -243,7 +250,7 @@ select { border: 1px solid var(--border); border-radius: 5px; background: var(--
 .gauge-cg { color: var(--text); }
 
 /* workspace */
-.workspace { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; background: var(--surface); border-top: 1px solid var(--border); margin: 0 12px 12px; border-radius: 8px; border: 1px solid var(--border); }
+.workspace { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; background: var(--surface); border-top: 1px solid var(--border); margin: 0 12px 12px; border-radius: 8px; border: 1px solid var(--border); }
 .ws-col { padding: 10px 14px; border-right: 1px solid var(--border); min-width: 0; }
 .ws-col:last-child { border-right: 0; }
 .ws-col h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); margin: 0 0 6px; }
@@ -255,10 +262,15 @@ select { border: 1px solid var(--border); border-radius: 5px; background: var(--
 .warn-text { color: var(--critical); font-weight: 650; }
 .foot { color: var(--muted); font-size: 11px; padding: 0 16px 16px; }
 
+@media (max-width: 1600px) {
+  .workspace { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ws-col:nth-child(3n) { border-right: 0; }
+}
 @media (max-width: 1280px) {
   .row2 { grid-template-columns: minmax(0, 1fr); }
   .workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ws-col:nth-child(2) { border-right: 0; }
+  .ws-col:nth-child(3n) { border-right: 1px solid var(--border); }
+  .ws-col:nth-child(2n) { border-right: 0; }
 }
 @media (max-width: 820px) {
   .layout { grid-template-columns: minmax(0, 1fr); }

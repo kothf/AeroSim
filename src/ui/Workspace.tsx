@@ -48,7 +48,8 @@ export function MarginGauge({ r, onExplain }: { r: AnalysisResult; onExplain?: (
 }
 
 export function Workspace({ r, latency }: { r: AnalysisResult; latency: number }) {
-  const { aero: a, stat, ss, man, prop } = r;
+  const { aero: a, stat, ss, man, prop, points: pts, geometry: g } = r;
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
   const sp = ss.modes.shortPeriod;
   const ph = ss.modes.phugoid;
   const hq = man.handling;
@@ -78,6 +79,21 @@ export function Workspace({ r, latency }: { r: AnalysisResult; latency: number }
         <Row k={<>M<sub>w</sub> · M<sub>ẇ</sub></>} hint="Pitch acceleration per unit vertical velocity (static stability) and per unit vertical acceleration (downwash lag)." v={`${fixed(ss.dim.Mw, 4)} · ${fixed(ss.dim.Mwdot, 5)}`} />
         <Row k={<>M<sub>q</sub> · M<sub>u</sub></>} hint="M_q: pitch damping (1/s). M_u: pitch acceleration with speed, here from the thrust line offset (z_T dT/du)." v={`${fixed(ss.dim.Mq, 3)} s⁻¹ · ${fixed(ss.dim.Mu, 5)}`} />
         <Row k={<>X<sub>np</sub> · X'<sub>np</sub> · X<sub>mp</sub></>} hint="Stick-fixed neutral point (where C_mα = 0), stick-free neutral point (elevator floating) and stick-fixed maneuver point (where dδe/dn = 0), in % MAC." v={`${(stat.xnp * 100).toFixed(1)} · ${(stat.xnpFree * 100).toFixed(1)} · ${(man.xmp * 100).toFixed(1)}%`} />
+      </div>
+      <div className="ws-col">
+        <h3>Geometry</h3>
+        <Row k="Overall length" hint={TERMS.LENGTH} v={`${fixed(pts.overallLength, 2)} m`} />
+        <Row k="Span b · AR" hint="Wing span b = √(AR·S) and aspect ratio." v={`${fixed(g.span, 2)} m · ${fixed(r.inputs.aspectRatio, 1)}`} />
+        <Row k={<>Chord c<sub>r</sub> / c<sub>t</sub></>} hint="Root and tip chords of the trapezoidal wing: c_r = 2S/(b(1+λ)), c_t = λ c_r." v={`${fixed(g.rootChord, 2)} / ${fixed(g.tipChord, 2)} m`} />
+        <Row k={<>MAC c̄ · y<sub>MAC</sub></>} hint={TERMS.MAC} v={`${fixed(g.mac, 3)} m · ${fixed(g.yMac, 2)} m`} />
+        <Row k={<>MAC LE station · Λ<sub>LE</sub></>} hint="Fuselage station of the MAC leading edge (all %MAC positions are measured from here) and the leading-edge sweep derived from the quarter-chord sweep and taper." v={`${fixed(g.macLe, 2)} m · ${fixed(g.sweepLE / DEG, 1)}°`} />
+        <Row k={<>Tail S<sub>t</sub> · b<sub>t</sub> · c<sub>t</sub></>} hint="Horizontal tail area S_t = V_h S c̄ / l_t, span and chord (rectangular tail)." v={`${fixed(g.tailArea, 2)} m² · ${fixed(g.tailSpan, 2)} · ${fixed(g.tailChord, 2)} m`} />
+        <h3 className="sub">AC &amp; CP (stations from nose)</h3>
+        <Row k="AC wing · wing-body" hint={TERMS.AC} v={`${pct(pts.acWing)} · ${pct(pts.acWingBody)}`} />
+        <Row k="AC aircraft (= NP)" hint={`${TERMS.AC} ${TERMS.AC_AIRCRAFT}`} v={`${pct(pts.acAircraft)} (${fixed(pts.stations.acAircraft, 2)} m)`} />
+        <Row k="CP wing (trim)" hint={`${TERMS.CP_WING} Trim wing C_L,w = ${fixed(pts.CLwTrim, 3)}.`} v={pts.cpWing === null ? '— (C_L,w ≈ 0)' : `${pct(pts.cpWing)} (${fixed(pts.stations.cpWing!, 2)} m)`} />
+        <Row k="CP aircraft (trim)" hint={TERMS.CP} v={pts.cpAircraft === null ? '—' : `${pct(pts.cpAircraft)} (${fixed(pts.stations.cpAircraft!, 2)} m)`} />
+        <Row k="CG · tail AC" hint="Stations of the CG and of the tail aerodynamic centre (wing AC + l_t), aft of the nose." v={`${fixed(pts.stations.cg, 2)} · ${fixed(pts.stations.tailAc, 2)} m`} />
       </div>
       <div className="ws-col">
         <h3>Dynamic modes</h3>

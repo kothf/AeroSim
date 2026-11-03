@@ -7,12 +7,14 @@ export interface AircraftInputs {
   // Main wing
   wingNaca: string;
   aspectRatio: number;
-  sweepDeg: number;
+  sweepDeg: number; // quarter-chord sweep
+  taperRatio: number; // tip chord / root chord
   wingArea: number; // m^2
   xacWing: number; // fraction of MAC
   fuselageXacShift: number; // fraction of MAC (Munk/Multhopp body effect, negative = forward)
   // Installation (schematic layout; fuselage stations measured aft of the nose)
   fuselageLength: number; // m
+  fuselageDiameter: number; // m (max width/height)
   wingStation: number; // wing root leading edge station [m]
   // Tail plane
   tailNaca: string;
@@ -56,10 +58,12 @@ export const DEFAULT_INPUTS: AircraftInputs = {
   wingNaca: '4415',
   aspectRatio: 9.5,
   sweepDeg: 0,
+  taperRatio: 1,
   wingArea: 16.2,
   xacWing: 0.25,
   fuselageXacShift: -0.12,
   fuselageLength: 8.2,
+  fuselageDiameter: 1.2,
   wingStation: 2.1,
   tailNaca: '0012',
   tailAspectRatio: 4.0,
@@ -96,10 +100,12 @@ export const DEFAULT_INPUTS: AircraftInputs = {
 export const INPUT_BOUNDS: Partial<Record<keyof AircraftInputs, [number, number]>> = {
   aspectRatio: [2, 30],
   sweepDeg: [0, 60],
+  taperRatio: [0.1, 1],
   wingArea: [2, 500],
   xacWing: [0.15, 0.4],
   fuselageXacShift: [-0.3, 0.1],
   fuselageLength: [2, 80],
+  fuselageDiameter: [0.3, 8],
   wingStation: [0.2, 60],
   tailAspectRatio: [1, 10],
   tailVolume: [0.1, 1.5],

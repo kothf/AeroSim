@@ -78,6 +78,30 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: 'acCp',
+    title: 'AC and CP',
+    body: (
+      <>
+        <p>Both are shown on the schematic (ticks and MAC ruler) and listed with their fuselage stations in the Geometry column of the workspace.</p>
+        <h4>Aerodynamic centre, AC</h4>
+        <p>The point about which the pitching moment does not change with angle of attack. It is a fixed property of the shape.</p>
+        <ul>
+          <li><b>Wing AC</b> ≈ 25% MAC (thin airfoil theory), the input x_ac.</li>
+          <li><b>Wing-body AC</b> ("AC wb") = x_ac + Δx_ac,body. The fuselage usually moves it forward (Munk/Multhopp).</li>
+          <li><b>Aircraft AC</b> (wing + body + tail) is the stick-fixed neutral point NP. That is why the schematic labels it "NP = AC".</li>
+        </ul>
+        <h4>Centre of pressure, CP</h4>
+        <p>The point where the resultant aerodynamic force acts with zero moment. Unlike the AC it moves with angle of attack.</p>
+        <F>x_cp,wing = x_ac − c_m,ac / C_L,w</F>
+        <p>For a cambered wing (c_m,ac &lt; 0) the wing CP lies aft of the AC and runs far aft as C_L falls; for a symmetric section it sits on the AC.</p>
+        <F>x_cp,aircraft = x_cg + C_m,T / C_L   (trimmed flight)</F>
+        <p>In trim the total aerodynamic moment about the CG balances the thrust moment, so the aircraft CP is on the CG when the thrust line passes through the CG. The side view draws the lift at the CP and the weight at the CG.</p>
+        <h4>Geometry</h4>
+        <p>The wing is trapezoidal: root chord c_r = 2S/(b(1+λ)), tip chord λc_r, MAC c̄ = (2/3)c_r(1+λ+λ²)/(1+λ) at y = (b/6)(1+2λ)/(1+λ). Sweep is entered at the quarter chord; the leading-edge sweep follows from tan Λ_LE = tan Λ_c/4 + (1−λ)/(AR(1+λ)). Overall length is the larger of the fuselage length and the tail trailing-edge station.</p>
+      </>
+    ),
+  },
+  {
     id: 'gauge',
     title: 'Margin gauge & alerts',
     body: (
