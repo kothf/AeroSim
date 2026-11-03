@@ -15,6 +15,9 @@ export interface MassItem {
   pos: number;
   /** height below the fuselage reference line [m] (positive down) */
   z: number;
+  /** size of the item (box length along x and height along z) [m]; sets its own pitch inertia */
+  len: number;
+  h: number;
 }
 
 /** 'components': CG, mass and I_yy come from massItems + the engine; 'manual': typed in directly. */
@@ -78,15 +81,15 @@ export interface AircraftInputs {
 
 /** Mass breakdown of the default four-seat aircraft at MTOW (engine comes from the powerplant). */
 export const DEFAULT_MASS_ITEMS: MassItem[] = [
-  { id: 'wing', name: 'Wing structure', mass: 150, ref: 'mac', pos: 0.4, z: 0.3 },
-  { id: 'fuel', name: 'Fuel (wing tanks)', mass: 150, ref: 'mac', pos: 0.3, z: 0.3 },
-  { id: 'fus', name: 'Fuselage structure', mass: 160, ref: 'fuselage', pos: 0.38, z: 0 },
-  { id: 'tail', name: 'Tail (H + V)', mass: 35, ref: 'tail', pos: 0.1, z: -0.6 },
-  { id: 'gear', name: 'Landing gear', mass: 60, ref: 'nose', pos: 2.5, z: 0.5 },
-  { id: 'sys', name: 'Systems & avionics', mass: 80, ref: 'nose', pos: 1.5, z: -0.2 },
-  { id: 'front', name: 'Pilot + front pax', mass: 170, ref: 'nose', pos: 2.5, z: -0.2 },
-  { id: 'rear', name: 'Rear pax', mass: 85, ref: 'nose', pos: 3.4, z: -0.2 },
-  { id: 'bag', name: 'Baggage', mass: 30, ref: 'nose', pos: 3.9, z: -0.1 },
+  { id: 'wing', name: 'Wing structure', mass: 150, ref: 'mac', pos: 0.4, z: 0.3, len: 1.3, h: 0.15 },
+  { id: 'fuel', name: 'Fuel (wing tanks)', mass: 150, ref: 'mac', pos: 0.3, z: 0.3, len: 0.7, h: 0.15 },
+  { id: 'fus', name: 'Fuselage structure', mass: 160, ref: 'fuselage', pos: 0.38, z: 0, len: 6.5, h: 1.0 },
+  { id: 'tail', name: 'Tail (H + V)', mass: 35, ref: 'tail', pos: 0.1, z: -0.6, len: 1.6, h: 1.2 },
+  { id: 'gear', name: 'Landing gear', mass: 60, ref: 'nose', pos: 2.5, z: 0.5, len: 0.4, h: 0.6 },
+  { id: 'sys', name: 'Systems & avionics', mass: 80, ref: 'nose', pos: 1.5, z: -0.2, len: 0.6, h: 0.4 },
+  { id: 'front', name: 'Pilot + front pax', mass: 170, ref: 'nose', pos: 2.5, z: -0.2, len: 0.7, h: 0.9 },
+  { id: 'rear', name: 'Rear pax', mass: 85, ref: 'nose', pos: 3.4, z: -0.2, len: 0.7, h: 0.9 },
+  { id: 'bag', name: 'Baggage', mass: 30, ref: 'nose', pos: 3.9, z: -0.1, len: 0.6, h: 0.5 },
 ];
 
 /** Defaults: a four-seat, single-engine general-aviation aircraft in cruise. */

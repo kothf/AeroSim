@@ -20,16 +20,13 @@ export function cgStation(inp: AircraftInputs, geo: Geometry): number {
 }
 
 /**
- * Slide the wing along the fuselage. The CG and the tail stay fixed in the airframe, so the CG
- * expressed in %MAC and the tail arm both change; the tail area is unchanged so V_h follows.
- * The wing stops when the (fixed) CG reaches its leading or trailing edge, because the CG is
- * restricted to 0-100% MAC; it never drags the CG along.
+ * Slide the wing along the fuselage. The tail stays fixed in the airframe, so the tail arm changes;
+ * the tail area is unchanged so V_h follows. The wing moves freely: with a manually entered CG the
+ * CG stays fixed in the airframe (its %MAC changes and is clamped to 0-100% MAC); with the CG from
+ * components it is recomputed from the moved wing items.
  */
 export function moveWing(inp: AircraftInputs, geo: Geometry, newStation: number): Partial<AircraftInputs> {
-  const minShift = (inp.xcg - 1) * geo.mac; // CG at the trailing edge
-  const maxShift = inp.xcg * geo.mac; // CG at the leading edge
-  const shift = Math.min(Math.max(newStation - inp.wingStation, minShift), maxShift);
-  newStation = inp.wingStation + shift;
+  const shift = newStation - inp.wingStation;
   const tailArm = clamp('tailArm', inp.tailArm - shift);
   return {
     wingStation: newStation,

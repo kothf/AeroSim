@@ -45,7 +45,7 @@ export interface MassProperties {
 }
 
 /** Allowance for the vertical spread inside each item: m · (VERTICAL_GYRATION · fuselage diameter)². */
-export const VERTICAL_GYRATION = 0.25;
+export const VERTICAL_GYRATION = 0.15;
 
 export function itemStation(item: MassItem, inp: AircraftInputs, geo: Geometry): number {
   switch (item.ref) {
@@ -66,16 +66,15 @@ export function itemPosFromStation(item: MassItem, station: number, inp: Aircraf
   }
 }
 
-/** Own inertia of a component about its CG: rods for the fuselage, the wing chord and the tail. */
-function ownInertia(item: MassItem, inp: AircraftInputs, geo: Geometry): number {
-  const L = item.ref === 'fuselage' ? inp.fuselageLength * 0.8 : item.ref === 'mac' ? geo.mac : item.ref === 'tail' ? geo.tailChord * 2 : 0;
-  return (item.mass * L * L) / 12;
+/** Own pitch inertia of a component about its CG: a uniform box of length len and height h. */
+function ownInertia(item: MassItem): number {
+  return (item.mass * (item.len * item.len + item.h * item.h)) / 12;
 }
 
 export function massProperties(inp: AircraftInputs, geo: Geometry = geometry(inp)): MassProperties {
   const rows: MassBreakdownRow[] = inp.massItems.map((it) => {
     const station = itemStation(it, inp, geo);
-    return { id: it.id, name: it.name, mass: it.mass, station, z: it.z, moment: it.mass * station, ownInertia: ownInertia(it, inp, geo) };
+    return { id: it.id, name: it.name, mass: it.mass, station, z: it.z, moment: it.mass * station, ownInertia: ownInertia(it) };
   });
   // engine mass sits on its thrust line (thrustLineZ is measured from the reference line in this mode)
   rows.push({ id: 'engine', name: inp.engineCount === 2 ? 'Engines (2)' : 'Engine', mass: inp.engineMass, station: inp.engineStation, z: inp.thrustLineZ, moment: inp.engineMass * inp.engineStation, ownInertia: 0 });
