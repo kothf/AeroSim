@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

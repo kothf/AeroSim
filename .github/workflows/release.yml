@@ -1,0 +1,63 @@
+name: Release
+
+# Push a tag like v0.1.0 (matching package.json), or press "Run workflow" to release main's
+# package.json version. Publishes a GitHub release with aerosim-<version>.tar.gz + .sha256,
+# which aerocat.tech pins by version and checksum in its vendor.json.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Tag must match package.json version
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="v$pkg"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then echo "::error::Tag $tag already exists"; exit 1; fi
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          if [ "${tag#v}" != "$pkg" ]; then echo "::error::Tag $tag does not match package.json $pkg"; exit 1; fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run package -- "${TAG#v}"
+
+      - name: Tag the release (Run workflow)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG" release/*.tar.gz release/*.tar.gz.sha256 --title "AeroSim $TAG" --generate-notes --verify-tag
+
+      # Same hook as the other vendored tools: needs a SITE_DISPATCH_TOKEN secret allowed to run
+      # workflows in kothf/astro_source-new_theme; without it the site's scheduled update picks it up.
+      - name: Ask aerocat.tech to pick up this release
+        env:
+          SITE_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$SITE_TOKEN" ]; then echo "::notice::No SITE_DISPATCH_TOKEN secret: vendor update not dispatched"; exit 0; fi
+          GH_TOKEN="$SITE_TOKEN" gh workflow run vendor-update.yml --repo kothf/astro_source-new_theme --ref main
