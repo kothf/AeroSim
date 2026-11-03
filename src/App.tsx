@@ -4,14 +4,21 @@ import {
 } from './engine';
 import { LineChart, Series } from './ui/LineChart';
 import { SPlane } from './ui/SPlane';
-import { Schematic } from './ui/Schematic';
-import { Sidebar } from './ui/Sidebar';
+import { Editor } from './ui/Editor';
+import { Inspector, Sel } from './ui/Inspector';
 import { MarginGauge, Workspace } from './ui/Workspace';
-import { Hint, Slider } from './ui/Fields';
+import { Slider } from './ui/Fields';
 import { TipLayer } from './ui/TipLayer';
 import { HelpDialog } from './ui/HelpDialog';
 
-type GraphKind = 'cm' | 'splane' | 'time';
+type GraphKind = 'cm' | 'splane' | 'time' | 'maneuver' | 'coeffs';
+const TAB_TIPS: Record<GraphKind, string> = {
+  cm: 'Total pitching moment coefficient vs angle of attack. A negative slope (C_mα < 0) means static stability; the trim point is where C_m = 0.',
+  splane: 'Eigenvalues of the A matrix on the complex plane. Left half = stable. Dots show how the poles move as the CG is swept; click one to move the CG there.',
+  time: 'Response to an elevator pulse: fast short-period α oscillation (left) and slow phugoid exchange of speed and height (right).',
+  maneuver: 'Steady pull-up: elevator angle and stick force vs load factor, with the handling band.',
+  coeffs: 'Every computed coefficient: aerodynamics, stability derivatives, geometry, AC/CP, modes, maneuver and powerplant.',
+};
 const PLAYBACK_MS = 8000;
 const SIM_T = 120;
 
@@ -31,6 +38,7 @@ function useAnalysis(inp: AircraftInputs, pulseDeg: number, pulseDur: number) {
 export default function App() {
   const [inp, setInp] = useState<AircraftInputs>(DEFAULT_INPUTS);
   const [graph, setGraph] = useState<GraphKind>('cm');
+  const [sel, setSel] = useState<Sel>('aircraft');
   const [zoom, setZoom] = useState<'all' | 'phugoid'>('all');
   const [pulseDeg, setPulseDeg] = useState(-2);
   const [pulseDur, setPulseDur] = useState(0.5);
@@ -82,22 +90,22 @@ export default function App() {
     const alphas: number[] = [];
     for (let a = -6; a <= 14.001; a += 0.5) alphas.push(a);
     const line = (res: AnalysisResult, de: number) => alphas.map((a) => [a, res.aero.Cm0 + res.aero.Cma * a * DEG + res.aero.Cmde * de] as [number, number]);
-    const atNp = analyze({ ...inp, xcg: r.stat.xnp });
+    const atNp = analyze({ ...eff, xcg: r.stat.xnp });
     const series: Series[] = [
       { id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe = 0`, color: 'var(--s1)', points: line(r, 0), hint: 'C_m vs α at the current CG with the elevator neutral. Its slope is C_mα.' },
       { id: 'trim', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%, δe trim ${(r.stat.trim.deltaE / DEG).toFixed(1)}°`, color: 'var(--s2)', points: line(r, r.stat.trim.deltaE), hint: 'Same CG with the trim elevator angle: the line is shifted so that it crosses C_m = 0 at the trim angle of attack.' },
     ];
     if (atNp.ok) series.push({ id: 'np', label: `CG at NP ${(r.stat.xnp * 100).toFixed(1)}% (neutral)`, color: 'var(--muted)', dash: '5 4', points: line(atNp.result, 0), hint: 'Reference: CG placed at the stick-fixed neutral point. The slope is zero (neutral stability); CG aft of it tilts the line upward (unstable).' });
     return series;
-  }, [inp, r]);
+  }, [eff, r]);
 
   // --- Flight test: delta_e vs n, Fs vs n
   const ftData = useMemo(() => {
     const ns: number[] = [];
     for (let n = 0; n <= r.inputs.limitLoadFactor + 1e-9; n += 0.1) ns.push(Number(n.toFixed(2)));
     const deLine = (res: AnalysisResult) => ns.map((n) => [n, (res.stat.trim.deltaE + (n - 1) * res.man.deltaEPerG) / DEG] as [number, number]);
-    const fwd = analyze({ ...inp, xcg: Math.max(0, r.inputs.xcg - 0.1) });
-    const mp = analyze({ ...inp, xcg: Math.min(1, r.man.xmp) });
+    const fwd = analyze({ ...eff, xcg: Math.max(0, r.inputs.xcg - 0.1) });
+    const mp = analyze({ ...eff, xcg: Math.min(1, r.man.xmp) });
     const de: Series[] = [{ id: 'cur', label: `CG ${(r.inputs.xcg * 100).toFixed(1)}%`, color: 'var(--s1)', points: deLine(r), hint: 'Elevator angle needed to hold load factor n in a steady pull-up at the current CG.' }];
     if (fwd.ok) de.push({ id: 'fwd', label: `CG ${(fwd.result.inputs.xcg * 100).toFixed(1)}% (fwd)`, color: 'var(--s3)', points: deLine(fwd.result), hint: 'Same with the CG 10% MAC further forward: a steeper slope (more elevator per g).' });
     if (mp.ok) de.push({ id: 'mp', label: `CG at MP ${(r.man.xmp * 100).toFixed(1)}%`, color: 'var(--muted)', dash: '5 4', points: deLine(mp.result), hint: 'CG at the maneuver point: zero elevator per g, the boundary of maneuver stability.' });
@@ -107,7 +115,7 @@ export default function App() {
     const band = [[1, 0], [nl, h.min * (nl - 1)], [nl, h.max * (nl - 1)], [1, 0]] as [number, number][];
     const bandLo = [[0, 0], [1, 0], [0, -h.max], [0, -h.min]] as [number, number][];
     return { de, fs, band, bandLo };
-  }, [inp, r]);
+  }, [eff, r]);
 
   // --- time history
   const th = useMemo(() => {
@@ -195,23 +203,21 @@ export default function App() {
       )}
       {error && <div className="alert st-marginal" role="alert">! {error.field === 'wingNaca' ? 'Wing' : 'Tail'} NACA code rejected: {error.error}</div>}
 
-      <div className="layout">
-        <Sidebar inp={inp} set={set} mp={mp} onReset={() => setInp(DEFAULT_INPUTS)} />
-        <main className="canvas">
+      <div className="layout2">
+        <main className="main">
+          <section className="panel stage-panel">
+            <Editor r={r} mp={mp} sel={sel} onSelect={setSel} onChange={set} />
+          </section>
           <MarginGauge r={r} onExplain={() => setHelp({ open: true, section: 'points' })} />
-          <div className="row2">
-            <section className="panel">
-              <Schematic r={r} mp={mp} onChange={set} />
-            </section>
-            <section className="panel">
-              <div className="selector" role="tablist" aria-label="Graph selector">
-                {([['cm', 'Cm–α'], ['splane', 's-Plane poles'], ['time', 'Time history']] as [GraphKind, string][]).map(([k, l]) => (
-                  <button key={k} role="tab" aria-selected={graph === k} className={graph === k ? 'tab on' : 'tab'} onClick={() => setGraph(k)}
-                    data-tip={{ cm: 'Total pitching moment coefficient vs angle of attack. A negative slope (C_mα < 0) means static stability; the trim point is where C_m = 0.', splane: 'Eigenvalues of the A matrix on the complex plane. Left half = stable. Dots show how the poles move as the CG is swept; click one to move the CG there.', time: 'Response to an elevator pulse: fast short-period α oscillation (left) and slow phugoid exchange of speed and height (right).' }[k]}>{l}</button>
-                ))}
-                <span className="spacer" />
-                <button className="btn primary" onClick={pulse}>Pulse elevator</button>
-              </div>
+          <section className="panel">
+            <div className="selector" role="tablist" aria-label="Analysis">
+              {([['cm', 'Cm–α'], ['splane', 's-Plane poles'], ['time', 'Time history'], ['maneuver', 'Maneuver & stick force'], ['coeffs', 'All coefficients']] as [GraphKind, string][]).map(([k, l]) => (
+                <button key={k} role="tab" aria-selected={graph === k} className={graph === k ? 'tab on' : 'tab'} onClick={() => setGraph(k)}
+                  data-tip={TAB_TIPS[k]}>{l}</button>
+              ))}
+              <span className="spacer" />
+              <button className="btn primary" onClick={pulse}>Pulse elevator</button>
+            </div>
               {graph === 'cm' && (
                 <LineChart ariaLabel="Cm versus alpha" title="Pitching moment vs angle of attack" series={cmData} hint="FR-2.1: C_m = C_m0 + C_L(x_cg − x_ac) − V_h η C_Lt. Negative slope = statically stable; the trim point is where the trimmed line crosses C_m = 0." 
                   xLabel="α [deg]" yLabel="C_m" xUnit="°" height={330}
@@ -221,7 +227,7 @@ export default function App() {
               {graph === 'splane' && (
                 <>
                   <SPlane roots={r.ss.eigenvalues} spRoots={r.ss.modes.shortPeriod.roots} locus={locus} xnp={r.stat.xnp} zoom={zoom}
-                    onPickCg={(x) => set({ xcg: Number(x.toFixed(3)) })} />
+                    onPickCg={inp.massMode === 'manual' ? (x) => set({ xcg: Number(x.toFixed(3)) }) : undefined} />
                   <div className="sub-toggle">
                     <button className={zoom === 'all' ? 'tab on' : 'tab'} onClick={() => setZoom('all')}>All poles + CG locus</button>
                     <button className={zoom === 'phugoid' ? 'tab on' : 'tab'} onClick={() => setZoom('phugoid')}>Phugoid zoom</button>
@@ -251,11 +257,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </section>
-          </div>
-
-          <section className="panel">
-            <div className="panel-title">Flight test: elevator deflection and stick force vs load factor<Hint text="Steady pull-up at constant speed. Left: elevator angle needed per load factor; the slope dδe/dn shrinks to zero as the CG approaches the maneuver point (MP). Right: stick force with the trim tab nulling the 1 g force; the green band is the acceptable stick-force-per-g range." /></div>
+              {graph === 'maneuver' && (
             <div className="twin even">
               <LineChart ariaLabel="Elevator versus load factor" title="δe vs n (slope = stick-fixed maneuver margin)" series={ftData.de} hint="FR-4.1: dδe/dn = −(C_mα C_W + C_Lα C_mq ĝ)/(C_Lα C_mδe − C_Lδe C_mα). Zero slope at the maneuver point." 
                 xLabel="Load factor n [g]" yLabel="δe [deg]" xUnit=" g" yUnit="°" height={250}
@@ -266,10 +268,12 @@ export default function App() {
                 hRefs={[{ y: r.man.handling.forceLimit, label: `limit ${r.man.handling.forceLimit} N (60 lbf)`, strong: true }]}
                 vRefs={[{ x: 1, label: '1 g' }]} />
             </div>
+              )}
+              {graph === 'coeffs' && <Workspace r={r} latency={latency} />}
           </section>
         </main>
+        <Inspector inp={inp} r={r} mp={mp} sel={sel} onSelect={setSel} set={set} onReset={() => setInp(DEFAULT_INPUTS)} />
       </div>
-      <Workspace r={r} latency={latency} />
       <TipLayer />
       <HelpDialog open={help.open} initial={help.section} onClose={() => setHelp({ open: false })} />
       <footer className="foot">

@@ -43,8 +43,8 @@ const SECTIONS: Section[] = [
       <>
         <p>AeroSim Analytics is a digital twin of a light aircraft's longitudinal flight mechanics. Every change you make recomputes the whole model (aerodynamics → trim → state-space model → modes → maneuvering) in a few milliseconds.</p>
         <ol>
-          <li><b>Set the configuration</b> in the left sidebar: wing and tail NACA codes, geometry, mass, powerplant and flight condition. Every field has a slider and an <span className="hint static">i</span> hint.</li>
-          <li><b>Or drag the schematic</b>: move the wing, tail, elevator hinge, CG or engine directly on the drawing.</li>
+          <li><b>Pick a part</b> on the canvas or in the parts list on the right (Aircraft, Fuselage, Wing, Horizontal tail, Engine, masses, Flight condition). Its properties open below the list; every field has a slider and an <span className="hint static">i</span> hint.</li>
+          <li><b>Or edit on the canvas</b>: drag parts to move them and the round handles of the selected part to resize it.</li>
           <li><b>Watch the margin gauge</b> at the top. It turns amber below 5% static margin and red when the CG goes aft of the neutral point.</li>
           <li><b>Pick a graph</b>: C_m–α (static stability), s-Plane poles (dynamic modes), or Time history. Press <b>Pulse elevator</b> to replay the response to an elevator pulse.</li>
           <li><b>Read the numbers</b> in the bottom workspace. Hover any <span className="hint static">i</span> for its definition.</li>
@@ -59,7 +59,7 @@ const SECTIONS: Section[] = [
     title: 'CG, NP, NP′ and MP',
     body: (
       <>
-        <p>All four are positions along the mean aerodynamic chord, in % MAC from its leading edge. They are drawn on the gauge, as ticks on the fuselage in the schematic, and on the MAC ruler beside it.</p>
+        <p>All four are positions along the mean aerodynamic chord, in % MAC from its leading edge. They are drawn on the gauge, as ticks across the fuselage in the top view, and on the MAC ruler beside it.</p>
         <h4>Stick-fixed neutral point, NP</h4>
         <p>The CG position at which the aircraft is neutrally stable with the elevator held fixed: dC_m/dα = 0.</p>
         <F>x_np = x_ac + V_h · η · (C_Lα,t / C_Lα,w) · (1 − dε/dα)</F>
@@ -82,10 +82,10 @@ const SECTIONS: Section[] = [
     title: 'Mass & balance (CG from components)',
     body: (
       <>
-        <p>With the CG source set to <b>From components</b>, the sidebar table lists each component's mass, longitudinal position and height z below the fuselage reference line. The engine row comes from the Powerplant section. The CG, total mass and I_yy are computed from them:</p>
+        <p>With the CG source (Aircraft in the parts list) set to <b>Computed from parts &amp; masses</b>, every part and mass item has a mass, a longitudinal position and a height z below the fuselage reference line; the Aircraft panel lists them all. The structural masses are edited in their part (wing structure and fuel under Wing, and so on), the engine under Engine. The CG, total mass and I_yy are computed from them:</p>
         <F>x_cg = Σ m_i x_i / Σ m_i      z_cg = Σ m_i z_i / Σ m_i</F>
         <F>I_yy = Σ m_i [(x_i − x_cg)² + (z_i − z_cg)²] + Σ I_own,i</F>
-        <p>Positions can be measured from the nose, as a fraction of the fuselage length, as a fraction of the MAC (wing structure and wing fuel, which move with the wing), or from the tail AC (tail structure, moves with the tail). So moving the wing, the tail or the engine now moves the CG. Components are drawn as purple dots in the side view; drag them to move them. Switch to <b>Manual</b> to type the CG, mass and I_yy directly.</p>
+        <p>Positions can be measured from the nose, as a fraction of the fuselage length, as a fraction of the MAC (wing structure and wing fuel, which move with the wing), or from the tail AC (tail structure, moves with the tail). So moving the wing, the tail or the engine now moves the CG. Mass items are purple boxes in the side view: drag them to move them, drag the corner handle to resize, or add one with “+ add” in the parts list. Switch to <b>Manual</b> to type the CG, mass and I_yy directly.</p>
         <h4>Engine installation height</h4>
         <p>In components mode the thrust-line height is measured below the reference line, and the model uses its offset from the CG, z_T = z_engine − z_cg (the engine mass itself also shifts z_cg). z_T enters in two places:</p>
         <ul>
@@ -101,13 +101,13 @@ const SECTIONS: Section[] = [
     title: 'AC and CP',
     body: (
       <>
-        <p>Both are shown on the schematic (ticks and MAC ruler) and listed with their fuselage stations in the Geometry column of the workspace.</p>
+        <p>Both are shown on the canvas (ticks and MAC ruler) and listed with their fuselage stations under All coefficients → Geometry.</p>
         <h4>Aerodynamic centre, AC</h4>
         <p>The point about which the pitching moment does not change with angle of attack. It is a fixed property of the shape.</p>
         <ul>
           <li><b>Wing AC</b> ≈ 25% MAC (thin airfoil theory), the input x_ac.</li>
           <li><b>Wing-body AC</b> ("AC wb") = x_ac + Δx_ac,body. The fuselage usually moves it forward (Munk/Multhopp).</li>
-          <li><b>Aircraft AC</b> (wing + body + tail) is the stick-fixed neutral point NP. That is why the schematic labels it "NP = AC".</li>
+          <li><b>Aircraft AC</b> (wing + body + tail) is the stick-fixed neutral point NP. That is why the canvas labels it "NP=AC".</li>
         </ul>
         <h4>Centre of pressure, CP</h4>
         <p>The point where the resultant aerodynamic force acts with zero moment. Unlike the AC it moves with angle of attack.</p>
@@ -131,26 +131,23 @@ const SECTIONS: Section[] = [
           <li><b className="c-warn">! Marginal</b>: 0–5% MAC. The layout turns amber and a banner suggests a CG position for a 5% margin.</li>
           <li><b className="c-crit">✕ Unstable</b>: CG aft of NP. C_mα becomes positive, the C_m–α line slopes upward, a real pole enters the right half of the s-plane and the layout turns red.</li>
         </ul>
-        <p>The handling badge (workspace, right column) shows whether stick force per g is inside the 13–125 N/g band, too light, too heavy, or reversed.</p>
+        <p>The handling badge (All coefficients tab, Maneuver column) shows whether stick force per g is inside the 13–125 N/g band, too light, too heavy, or reversed.</p>
       </>
     ),
   },
   {
     id: 'schematic',
-    title: 'Using the schematic',
+    title: 'Using the editor',
     body: (
       <>
-        <p>The top view has the nose up and the side view has the nose to the left. Everything you can drag changes the corresponding sidebar value:</p>
+        <p>The canvas shows the top view (nose up) and the side view (nose left). The parts list on the right works like a CAD feature tree: <b>click a part</b> on the canvas or in the list and its properties (position, size, mass, section) open below the list, where you can type exact values.</p>
         <ul>
-          <li><b>Wing body</b>: slides the wing along the fuselage. The CG and tail stay fixed in the airframe, so the CG in % MAC and the tail arm change (moving the wing aft makes the aircraft more stable). The wing stops when the CG reaches its leading or trailing edge.</li>
-          <li><b>Round handle at the wing tip</b>: left/right changes span (aspect ratio at constant area), up/down changes sweep.</li>
-          <li><b>Tail body</b>: changes the tail arm l_t at constant tail area, so V_h changes too.</li>
-          <li><b>Round handle at the tail tip</b>: changes the tail size (V_h) at constant tail aspect ratio.</li>
-          <li><b>Elevator hinge line</b> (dark green band): changes the elevator chord ratio and with it τ.</li>
-          <li><b>CG symbol</b>: moves the CG within 0–100% MAC.</li>
-          <li><b>Engine</b> (orange): changes the engine station. Its mass moves the CG (Δx_cg = m_e Δx / m) and I_yy is updated with the parallel-axis theorem. In the side view, dragging up/down changes the thrust-line offset z_T.</li>
+          <li><b>Drag a part</b> to move it: the wing along the fuselage, the tail (tail arm), the engine (station; in the side view also its height), and the mass boxes (station and height, side view).</li>
+          <li><b>Round handles</b> appear on the selected part: wing tips (span, sweep), wing root trailing edge (root chord, i.e. area), tail tips (tail size, V_h), the elevator hinge line, the fuselage tail end (length) and sides (diameter), and the corner of a mass box (its size).</li>
+          <li>The <b>CG and the reference points</b> (NP, NP′, MP, AC, CP) are display-only, so they never block a drag. Nothing stops a part from moving: if the computed CG leaves 0–100% MAC, a red banner says so.</li>
+          <li>Mouse wheel zooms about the pointer, dragging empty space pans, <b>Fit</b> resets the view, and <kbd>Shift</kbd> while dragging gives five times finer control.</li>
+          <li>With the CG computed from parts, moving the engine or a mass moves the CG (and I_yy). With a manual CG, the CG stays fixed in the airframe when the wing moves, so its % MAC changes.</li>
         </ul>
-        <p>Hold <kbd>Shift</kbd> while dragging for five times finer control.</p>
       </>
     ),
   },

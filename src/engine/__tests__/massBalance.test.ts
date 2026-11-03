@@ -22,7 +22,7 @@ describe('mass & balance from components', () => {
 
   it('adding a mass moves the CG by Δm (x − x_cg) / (m + Δm)', () => {
     const base = massProperties(comp());
-    const inp = comp({ massItems: [...DEFAULT_INPUTS.massItems, { id: 'b', name: 'Ballast', mass: 50, ref: 'nose', pos: 6, z: 0 }] });
+    const inp = comp({ massItems: [...DEFAULT_INPUTS.massItems, { id: 'b', name: 'Ballast', mass: 50, ref: 'nose', pos: 6, z: 0, len: 0.2, h: 0.2 }] });
     const mp = massProperties(inp);
     expect(mp.station - base.station).toBeCloseTo((50 * (6 - base.station)) / (base.mass + 50), 10);
   });
@@ -47,7 +47,7 @@ describe('mass & balance from components', () => {
     const inp = comp();
     const geo = geometry(inp);
     for (const ref of ['nose', 'fuselage', 'mac', 'tail'] as const) {
-      const it = { id: 'x', name: 'x', mass: 1, ref, pos: 0, z: 0 };
+      const it = { id: 'x', name: 'x', mass: 1, ref, pos: 0, z: 0, len: 0, h: 0 };
       const pos = itemPosFromStation(it, 3.3, inp, geo);
       expect(itemStation({ ...it, pos }, inp, geo)).toBeCloseTo(3.3, 12);
     }
