@@ -11,3 +11,4 @@ export * from './wing';
 export * from './matfile';
 export * from './propulsion';
 export * from './installation';
+export * from './nacaPresets';
