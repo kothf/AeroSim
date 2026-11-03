@@ -124,7 +124,10 @@ export type AnalysisError = { ok: false; field: 'wingNaca' | 'tailNaca'; error: 
 /** Handling-quality band for stick force per g (approximate, class I centre-stick/wheel). */
 export const STICK_FORCE_PER_G_MIN = 13; // N/g  (~3 lbf/g)
 export const STICK_FORCE_PER_G_MAX = 125; // N/g (~28 lbf/g)
-/** CS/FAR 23.143 temporary pitch force, wheel, two hands: 60 lbf. */
+/**
+ * 14 CFR 23.143(c) (pre-amendment 23-64 table) temporary pitch force for a centre stick: 60 lbf.
+ * (Wheel with two hands on the rim is 75 lbf; the model uses stick gearing, so the stick value applies.)
+ */
 export const STICK_FORCE_LIMIT = 267; // N
 
 export function flightState(inp: AircraftInputs): FlightState {
@@ -242,7 +245,8 @@ export function stateSpace(inp: AircraftInputs, a: AeroDerivatives, f: FlightSta
   const A: Matrix = [
     [Xu, Xw, 0, -g * Math.cos(th0)],
     [Zu, Zw, u0, -g * Math.sin(th0)],
-    [Mu + Mwdot * Zu, Mw + Mwdot * Zw, Mq + Mwdot * u0, 0],
+    // M row includes M_wdot * wdot, and wdot carries the -g sin(theta0) gravity term (Etkin & Reid, Dynamics of Flight, longitudinal equations in stability axes)
+    [Mu + Mwdot * Zu, Mw + Mwdot * Zw, Mq + Mwdot * u0, -Mwdot * g * Math.sin(th0)],
     [0, 0, 1, 0],
   ];
   const B = [Xde, Zde, Mde + Mwdot * Zde, 0];

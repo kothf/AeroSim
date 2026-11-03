@@ -88,13 +88,13 @@ export function Workspace({ r, latency }: { r: AnalysisResult; latency: number }
         <Row k="Phugoid period T" hint="Period of the phugoid oscillation, T = 2π/ω_d." v={ph.period ? `${fixed(ph.period, 1)} s` : 'aperiodic'} />
         <Row hint="Time to half amplitude (stable) or to double amplitude (unstable) of the phugoid." k={ph.stable ? <>t<sub>½</sub> phugoid</> : <>t<sub>2×</sub> phugoid</>} v={`${fixed(ph.stable ? ph.tHalf : ph.tDouble, 1)} s`} />
         <Row hint="Time to half amplitude (stable) or to double amplitude (unstable) of the short period." k={sp.stable ? <>t<sub>½</sub> short period</> : <>t<sub>2×</sub> short period</>} v={`${fixed(sp.stable ? sp.tHalf : sp.tDouble, 2)} s`} />
-        <Row k="Engine latency" hint="Time to recompute the whole model (aerodynamics, trim, A matrix, eigenvalues and a 120 s RK4 response). Requirement: under 30 ms." v={`${latency.toFixed(1)} ms ${latency < 30 ? '(< 30 ms)' : '(over budget)'}`} />
+        <Row k="Engine latency" hint="Time to recompute the whole model (aerodynamics, trim, A matrix, eigenvalues and a 120 s exact-discretisation response). Requirement: under 30 ms." v={`${latency.toFixed(1)} ms ${latency < 30 ? '(< 30 ms)' : '(over budget)'}`} />
       </div>
       <div className="ws-col">
         <h3>Maneuver &amp; handling</h3>
         <Row k="dδe/dn" hint="Elevator angle per g in a steady pull-up (stick-fixed). Negative = trailing edge up to pull. Its size is proportional to the maneuver margin." v={`${fixed(man.deltaEPerG / DEG, 3)} °/g`} />
         <Row k={<>F<sub>s</sub>/n</>} hint="Stick force per g, F_s/n = G η q S_e c_e dC_h/dn. Positive = pull. Too light invites over-stressing, too heavy tires the pilot." v={`${fixed(man.stickForcePerG, 1)} N/g (${fixed(man.stickForcePerG * N_TO_LBF, 1)} lbf/g)`} />
-        <Row hint="Pull force to reach the limit load factor from trimmed 1 g flight, against the 267 N (60 lbf) two-hand wheel limit of CS/FAR 23.143." k={<>F<sub>s</sub> at n = {fixed(man.limitLoadFactor, 1)}</>} v={`${fixed(hq.forceAtLimit, 0)} N (limit ${hq.forceLimit})`} />
+        <Row hint="Pull force to reach the limit load factor from trimmed 1 g flight, against the 267 N (60 lbf) centre-stick temporary pitch limit of 14 CFR 23.143(c)." k={<>F<sub>s</sub> at n = {fixed(man.limitLoadFactor, 1)}</>} v={`${fixed(hq.forceAtLimit, 0)} N (limit ${hq.forceLimit})`} />
         <Row k="Untrimmed 1 g force" hint="Stick force needed in 1 g flight before trimming it out with a tab, from C_h = C_h0 + C_hα α_t + C_hδ δe." v={`${fixed(man.stickForceTrim, 1)} N ${man.stickForceTrim >= 0 ? 'pull' : 'push'}`} />
         <div className={`badge st-${hqStatus}`}><span className="badge-icon" aria-hidden>{hq.status === 'ok' ? '✓' : '!'}</span>{hqLabel} ({hq.min}–{hq.max} N/g)</div>
         <h3 className="sub">Powerplant</h3>

@@ -103,3 +103,25 @@ export function solve2(a11: number, a12: number, a21: number, a22: number, b1: n
   const det = a11 * a22 - a12 * a21;
   return [(b1 * a22 - a12 * b2) / det, (a11 * b2 - a21 * b1) / det];
 }
+
+/**
+ * Matrix exponential e^M by scaling and squaring with a truncated Taylor series
+ * (Moler & Van Loan, "Nineteen Dubious Ways to Compute the Exponential of a Matrix", SIAM Rev. 2003).
+ * The matrix is scaled so that ||M||_inf / 2^s <= 0.5, where an 18-term series is accurate to machine precision.
+ */
+export function expm(M: Matrix): Matrix {
+  const n = M.length;
+  const norm = Math.max(...M.map((r) => r.reduce((s, v) => s + Math.abs(v), 0)));
+  const s = norm > 0.5 ? Math.ceil(Math.log2(norm / 0.5)) : 0;
+  const scale = Math.pow(2, -s);
+  const X = M.map((r) => r.map((v) => v * scale));
+  const I = (): Matrix => Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+  let E = I();
+  let term = I();
+  for (let k = 1; k <= 18; k++) {
+    term = matmul(term, X).map((r) => r.map((v) => v / k));
+    E = E.map((r, i) => r.map((v, j) => v + term[i][j]));
+  }
+  for (let k = 0; k < s; k++) E = matmul(E, E);
+  return E;
+}
