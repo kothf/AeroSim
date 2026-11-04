@@ -13,3 +13,4 @@ export * from './propulsion';
 export * from './installation';
 export * from './nacaPresets';
 export * from './massBalance';
+export * from './criteria';

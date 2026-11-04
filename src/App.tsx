@@ -10,13 +10,15 @@ import { MarginGauge, Workspace } from './ui/Workspace';
 import { Slider } from './ui/Fields';
 import { TipLayer } from './ui/TipLayer';
 import { HelpDialog } from './ui/HelpDialog';
+import { HandlingPanel } from './ui/HandlingPanel';
 
-type GraphKind = 'cm' | 'splane' | 'time' | 'maneuver' | 'coeffs';
+type GraphKind = 'cm' | 'splane' | 'time' | 'maneuver' | 'hq' | 'coeffs';
 const TAB_TIPS: Record<GraphKind, string> = {
   cm: 'Total pitching moment coefficient vs angle of attack. A negative slope (C_mα < 0) means static stability; the trim point is where C_m = 0.',
   splane: 'Eigenvalues of the A matrix on the complex plane. Left half = stable. Dots show how the poles move as the CG is swept; click one to move the CG there.',
   time: 'Response to an elevator pulse: fast short-period α oscillation (left) and slow phugoid exchange of speed and height (right).',
   maneuver: 'Steady pull-up: elevator angle and stick force vs load factor, with the handling band.',
+  hq: 'Handling-quality levels (MIL-F-8785C), 14 CFR 23 stick-force checks, CG envelope, stall speed and best-L/D speeds.',
   coeffs: 'Every computed coefficient: aerodynamics, stability derivatives, geometry, AC/CP, modes, maneuver and powerplant.',
 };
 const PLAYBACK_MS = 8000;
@@ -159,6 +161,11 @@ export default function App() {
       x_ac_wing: r.points.acWing, x_ac_wing_body: r.points.acWingBody, x_ac_aircraft: r.points.acAircraft,
       x_cp_wing: r.points.cpWing ?? NaN, x_cp_aircraft: r.points.cpAircraft ?? NaN,
       wing_naca: r.inputs.wingNaca, tail_naca: r.inputs.tailNaca,
+      n_alpha: r.hq.nAlpha, CAP: r.hq.cap.value, hq_level: r.hq.level, hq_level_sp_damping: r.hq.spDamping.level, hq_level_cap: r.hq.cap.level,
+      hq_level_phugoid: r.hq.phugoid.level, hq_level_Fs_per_g: r.hq.stickForcePerG.level, Fs_per_g_min: r.hq.stickForcePerG.min, Fs_per_g_max: r.hq.stickForcePerG.max,
+      Fs_at_limit: r.hq.maneuverForce.value, Fs_at_limit_required: r.hq.maneuverForce.required, Fs_speed_gradient: r.hq.speedStability.value,
+      x_mp_free: r.hq.xmpFree ?? NaN, x_cg_fwd_limit: r.hq.cgLimits.forward ?? NaN, x_cg_aft_limit: r.hq.cgLimits.aft,
+      V_stall: r.hq.stall.vStall, LD_max: r.hq.performance.LDmax, V_best_LD: r.hq.performance.vBestLD, V_min_power: r.hq.performance.vMinPower,
     });
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
     const a = document.createElement('a');
@@ -201,6 +208,24 @@ export default function App() {
       {mp && (mp.xcg < 0 || mp.xcg > 1) && (
         <div className="alert st-unstable" role="alert">✕ The computed CG is at {(mp.xcg * 100).toFixed(1)}% MAC, outside the 0–100% MAC range the model accepts (it is clamped to {mp.xcg < 0 ? '0' : '100'}%). Move components or the wing.</div>
       )}
+      {r.hq.stall.status !== 'ok' && (
+        <div className={`alert st-${r.hq.stall.status === 'stalled' ? 'unstable' : 'marginal'}`} role="alert">
+          {r.hq.stall.status === 'stalled'
+            ? `✕ Beyond the stall: trim needs C_L ${r.flight.CW.toFixed(2)} but C_L,max is ${r.inputs.clMax.toFixed(2)} (V_s ${(r.hq.stall.vStall / 0.514444).toFixed(0)} kts).`
+            : `! Only ${r.hq.stall.speedRatio.toFixed(2)} V_s: less than the usual 1.3 V_s margin above the stall speed of ${(r.hq.stall.vStall / 0.514444).toFixed(0)} kts.`}
+        </div>
+      )}
+      {(r.hq.level > 1 || !r.hq.maneuverForce.pass || !r.hq.speedStability.pass) && (
+        <div className="alert st-marginal" role="alert">
+          ! Handling: {[
+            r.hq.level > 1 && `MIL-F-8785C ${r.hq.level === 4 ? 'worse than Level 3' : `Level ${r.hq.level}`}`,
+            r.hq.stickForcePerG.level > 1 && `stick force ${r.hq.stickForcePerG.value.toFixed(0)} N/g outside ${r.hq.stickForcePerG.min.toFixed(0)}–${r.hq.stickForcePerG.max.toFixed(0)} N/g`,
+            !r.hq.maneuverForce.pass && `${r.hq.maneuverForce.value.toFixed(0)} N to reach n limit (23.155 needs ${r.hq.maneuverForce.required.toFixed(0)} N)`,
+            !r.hq.speedStability.pass && `speed gradient ${r.hq.speedStability.value.toFixed(2)} N/kt (23.173 needs ${r.hq.speedStability.required.toFixed(2)})`,
+          ].filter(Boolean).join('; ')}.{' '}
+          <button className="linkish" onClick={() => setGraph('hq')}>Details</button>
+        </div>
+      )}
       {error && <div className="alert st-marginal" role="alert">! {error.field === 'wingNaca' ? 'Wing' : 'Tail'} NACA code rejected: {error.error}</div>}
 
       <div className="layout2">
@@ -211,7 +236,7 @@ export default function App() {
           <MarginGauge r={r} onExplain={() => setHelp({ open: true, section: 'points' })} />
           <section className="panel">
             <div className="selector" role="tablist" aria-label="Analysis">
-              {([['cm', 'Cm–α'], ['splane', 's-Plane poles'], ['time', 'Time history'], ['maneuver', 'Maneuver & stick force'], ['coeffs', 'All coefficients']] as [GraphKind, string][]).map(([k, l]) => (
+              {([['cm', 'Cm–α'], ['splane', 's-Plane poles'], ['time', 'Time history'], ['maneuver', 'Maneuver & stick force'], ['hq', 'Handling qualities'], ['coeffs', 'All coefficients']] as [GraphKind, string][]).map(([k, l]) => (
                 <button key={k} role="tab" aria-selected={graph === k} className={graph === k ? 'tab on' : 'tab'} onClick={() => setGraph(k)}
                   data-tip={TAB_TIPS[k]}>{l}</button>
               ))}
@@ -262,13 +287,14 @@ export default function App() {
               <LineChart ariaLabel="Elevator versus load factor" title="δe vs n (slope = stick-fixed maneuver margin)" series={ftData.de} hint="FR-4.1: dδe/dn = −(C_mα C_W + C_Lα C_mq ĝ)/(C_Lα C_mδe − C_Lδe C_mα). Zero slope at the maneuver point." 
                 xLabel="Load factor n [g]" yLabel="δe [deg]" xUnit=" g" yUnit="°" height={250}
                 vRefs={[{ x: 1, label: '1 g' }]} />
-              <LineChart ariaLabel="Stick force versus load factor" title="F_s vs n (handling band shaded)" series={ftData.fs} hint="FR-4.2: F_s = G η q S_e c_e C_h with C_h = C_h0 + C_hα α_t + C_hδ δe. The green wedge spans the acceptable stick force per g (13–125 N/g); the red line is the 267 N pull limit." 
+              <LineChart ariaLabel="Stick force versus load factor" title="F_s vs n (handling band shaded)" series={ftData.fs} hint="FR-4.2: F_s = G η q S_e c_e C_h with C_h = C_h0 + C_hα α_t + C_hδ δe. The green wedge spans the MIL-F-8785C Level 1 stick force per g for this limit load factor; the red line is the 267 N pull limit and the dashed line the 14 CFR 23.155 minimum force at the limit load factor." 
                 bands={[{ label: 'band', points: ftData.band, color: 'var(--good)' }]}
                 xLabel="Load factor n [g]" yLabel="F_s [N] (+ pull)" xUnit=" g" yUnit=" N" height={250}
-                hRefs={[{ y: r.man.handling.forceLimit, label: `limit ${r.man.handling.forceLimit} N (60 lbf)`, strong: true }]}
+                hRefs={[{ y: r.man.handling.forceLimit, label: `limit ${r.man.handling.forceLimit} N (60 lbf)`, strong: true }, { y: r.man.handling.forceRequired, label: `23.155 min ${r.man.handling.forceRequired.toFixed(0)} N at n limit` }]}
                 vRefs={[{ x: 1, label: '1 g' }]} />
             </div>
               )}
+              {graph === 'hq' && <HandlingPanel r={r} />}
               {graph === 'coeffs' && <Workspace r={r} latency={latency} />}
           </section>
         </main>

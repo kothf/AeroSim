@@ -1,6 +1,8 @@
 /** Aircraft configuration inputs (the "digital twin" design parameters). */
 import type { LiftSlopeMethod } from './wing';
 
+import type { FlightCategory } from './criteria';
+
 export type EngineType = 'propeller' | 'jet';
 
 /** Where a component's position is measured from (see massBalance.ts). */
@@ -28,6 +30,8 @@ export interface AircraftInputs {
   wingNaca: string;
   aspectRatio: number;
   sweepDeg: number; // quarter-chord sweep
+  wingIncidenceDeg: number; // i_w, wing root chord relative to the fuselage reference line (= body x axis)
+  clMax: number; // maximum lift coefficient of the aircraft in the current configuration
   taperRatio: number; // tip chord / root chord
   wingArea: number; // m^2
   xacWing: number; // fraction of MAC
@@ -49,6 +53,7 @@ export interface AircraftInputs {
   chAlpha: number; // 1/rad
   chDelta: number; // 1/rad
   stickGearing: number; // G [rad/m]
+  downSpringN: number; // constant nose-down (push) force of a down-spring in the elevator circuit [N]
   // Powerplant
   engineType: EngineType;
   engineCount: number; // 1 or 2 (2 = wing-mounted pair)
@@ -77,6 +82,8 @@ export interface AircraftInputs {
   flightPathDeg: number; // gamma_0 (theta_0 in stability axes)
   limitLoadFactor: number;
   liftSlopeMethod: LiftSlopeMethod;
+  /** MIL-F-8785C flight phase category used for the handling-quality levels */
+  flightCategory: FlightCategory;
 }
 
 /** Mass breakdown of the default four-seat aircraft at MTOW (engine comes from the powerplant). */
@@ -94,9 +101,11 @@ export const DEFAULT_MASS_ITEMS: MassItem[] = [
 
 /** Defaults: a four-seat, single-engine general-aviation aircraft in cruise. */
 export const DEFAULT_INPUTS: AircraftInputs = {
-  wingNaca: '4415',
+  wingNaca: '2412',
   aspectRatio: 9.5,
   sweepDeg: 0,
+  wingIncidenceDeg: 1,
+  clMax: 1.5,
   taperRatio: 1,
   wingArea: 16.2,
   xacWing: 0.25,
@@ -113,11 +122,12 @@ export const DEFAULT_INPUTS: AircraftInputs = {
   elevatorChordRatio: 0.35,
   ch0: 0,
   chAlpha: -0.1,
-  chDelta: -0.32,
-  stickGearing: 2.0,
+  chDelta: -0.6,
+  stickGearing: 4.0,
+  downSpringN: 30,
   engineType: 'propeller',
   engineCount: 1,
-  maxPowerKw: 310,
+  maxPowerKw: 200,
   propEfficiency: 0.82,
   maxThrustKn: 9,
   engineStation: 0.7,
@@ -130,17 +140,20 @@ export const DEFAULT_INPUTS: AircraftInputs = {
   iyy: 2400,
   cd0: 0.027,
   oswald: 0.8,
-  speedKts: 180,
+  speedKts: 140,
   altitudeFt: 5000,
   flightPathDeg: 0,
   limitLoadFactor: 3.8,
   liftSlopeMethod: 'lifting-line',
+  flightCategory: 'B',
 };
 
 /** Numeric sanity bounds used by the UI and by the engine to sanitise inputs. */
 export const INPUT_BOUNDS: Partial<Record<keyof AircraftInputs, [number, number]>> = {
   aspectRatio: [2, 30],
   sweepDeg: [0, 60],
+  wingIncidenceDeg: [-5, 8],
+  clMax: [0.6, 4],
   taperRatio: [0.1, 1],
   wingArea: [2, 500],
   xacWing: [0.15, 0.4],
@@ -158,6 +171,7 @@ export const INPUT_BOUNDS: Partial<Record<keyof AircraftInputs, [number, number]
   chAlpha: [-1, 0.5],
   chDelta: [-1.5, -0.01],
   stickGearing: [0.1, 10],
+  downSpringN: [0, 300],
   engineCount: [1, 2],
   maxPowerKw: [10, 20000],
   propEfficiency: [0.4, 0.92],

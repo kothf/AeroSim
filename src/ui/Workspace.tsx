@@ -40,6 +40,8 @@ export function MarginGauge({ r, onExplain }: { r: AnalysisResult; onExplain?: (
         {[0, 0.25, 0.5, 0.75, 1].map((t) => <span key={t} className="gauge-tick" style={{ left: pos(t) }}>{t * 100}</span>)}
         <span className="gauge-mk mk-npf" style={{ left: pos(xnpFree) }} data-tip={`${TERMS.NPF} Now ${(xnpFree * 100).toFixed(1)}% MAC.`}>NP'</span>
         <span className="gauge-mk mk-np" style={{ left: pos(xnp) }} data-tip={`${TERMS.NP} Now ${(xnp * 100).toFixed(1)}% MAC.`}>NP</span>
+        {r.hq.cgLimits.forward !== null && r.hq.cgLimits.forward > 0 && <span className="gauge-mk mk-lim" style={{ left: pos(r.hq.cgLimits.forward) }} data-tip={`Forward CG limit: full up elevator to trim at C_L,max. Now ${(r.hq.cgLimits.forward * 100).toFixed(1)}% MAC.`}>FWD</span>}
+        <span className="gauge-mk mk-lim" style={{ left: pos(r.hq.cgLimits.aft) }} data-tip={`Aft CG limit: 5% stick-free margin or the Level 1 minimum stick force per g, whichever is further forward. Now ${(r.hq.cgLimits.aft * 100).toFixed(1)}% MAC.`}>AFT</span>
         <span className="gauge-mk mk-mp" style={{ left: pos(xmp) }} data-tip={`${TERMS.MP} Now ${(xmp * 100).toFixed(1)}% MAC.`}>MP</span>
         <span className="gauge-cg" style={{ left: pos(xcg) }} data-tip={`${TERMS.CG} Now ${(xcg * 100).toFixed(1)}% MAC.`}>CG</span>
       </div>
@@ -53,7 +55,7 @@ export function Workspace({ r, latency }: { r: AnalysisResult; latency: number }
   const sp = ss.modes.shortPeriod;
   const ph = ss.modes.phugoid;
   const hq = man.handling;
-  const hqLabel = { ok: 'Within handling band', 'too-light': 'Too light (PIO risk)', 'too-heavy': 'Too heavy', reversed: 'Reversed gradient' }[hq.status];
+  const hqLabel = { ok: 'MIL-F-8785C Level 1 band', 'too-light': 'Too light (PIO / over-stress risk)', 'too-heavy': 'Too heavy', reversed: 'Reversed gradient' }[hq.status];
   const hqStatus = hq.status === 'ok' ? 'stable' : hq.status === 'reversed' ? 'unstable' : 'marginal';
   return (
     <section className="workspace" aria-label="Live analytical coefficients">
@@ -112,7 +114,7 @@ export function Workspace({ r, latency }: { r: AnalysisResult; latency: number }
         <Row k={<>F<sub>s</sub>/n</>} hint="Stick force per g, F_s/n = G η q S_e c_e dC_h/dn. Positive = pull. Too light invites over-stressing, too heavy tires the pilot." v={`${fixed(man.stickForcePerG, 1)} N/g (${fixed(man.stickForcePerG * N_TO_LBF, 1)} lbf/g)`} />
         <Row hint="Pull force to reach the limit load factor from trimmed 1 g flight, against the 267 N (60 lbf) centre-stick temporary pitch limit of 14 CFR 23.143(c)." k={<>F<sub>s</sub> at n = {fixed(man.limitLoadFactor, 1)}</>} v={`${fixed(hq.forceAtLimit, 0)} N (limit ${hq.forceLimit})`} />
         <Row k="Untrimmed 1 g force" hint="Stick force needed in 1 g flight before trimming it out with a tab, from C_h = C_h0 + C_hα α_t + C_hδ δe." v={`${fixed(man.stickForceTrim, 1)} N ${man.stickForceTrim >= 0 ? 'pull' : 'push'}`} />
-        <div className={`badge st-${hqStatus}`}><span className="badge-icon" aria-hidden>{hq.status === 'ok' ? '✓' : '!'}</span>{hqLabel} ({hq.min}–{hq.max} N/g)</div>
+        <div className={`badge st-${hqStatus}`}><span className="badge-icon" aria-hidden>{hq.status === 'ok' ? '✓' : '!'}</span>{hqLabel} ({hq.min.toFixed(0)}–{hq.max.toFixed(0)} N/g)</div>
         <h3 className="sub">Powerplant</h3>
         <Row k="Thrust req / avail" hint="Thrust required (drag + W sin γ) vs full-throttle thrust available at this speed and altitude." v={`${fixed(prop.thrustRequired / 1000, 2)} / ${fixed(prop.thrustAvailable / 1000, 2)} kN`} />
         <Row k="Throttle" hint="Thrust required / thrust available. Over 100% means the flight condition cannot be sustained." v={<span className={prop.throttle > 1 ? 'warn-text' : ''}>{(prop.throttle * 100).toFixed(0)}%{prop.throttle > 1 ? ' (not sustainable)' : ''}</span>} />
