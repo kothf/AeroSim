@@ -137,6 +137,8 @@ export function Inspector({ inp, r, mp, sel, onSelect, set, onReset }: Props) {
             {num('aspectRatio')}
             {num('taperRatio')}
             {num('sweepDeg')}
+            {num('wingIncidenceDeg')}
+            {num('clMax')}
             {num('xacWing')}
             <label className="field">
               <span className="field-label">3D lift-slope method<Hint text="Lifting line: C_Lα = c_lα cosΛ/(1 + c_lα cosΛ/(π AR)). DATCOM (Helmbold–Diederich) is more accurate for low AR and swept wings." /></span>
@@ -169,6 +171,7 @@ export function Inspector({ inp, r, mp, sel, onSelect, set, onReset }: Props) {
             {num('chAlpha')}
             {num('chDelta')}
             {num('stickGearing')}
+            {num('downSpringN')}
             {mp && itemOf('tail') && <ItemMass item={itemOf('tail')!} upd={upd} />}
           </Section>
         )}
@@ -212,6 +215,14 @@ export function Inspector({ inp, r, mp, sel, onSelect, set, onReset }: Props) {
             {num('altitudeFt')}
             {num('flightPathDeg')}
             {num('limitLoadFactor')}
+            <label className="field">
+              <span className="field-label">Flight phase category<Hint text="MIL-F-8785C flight phase category used for the handling-quality levels. A: non-terminal tasks needing precise flight-path control; B: cruise, climb, descent; C: take-off, approach and landing." /></span>
+              <select value={inp.flightCategory} onChange={(e) => set({ flightCategory: e.target.value as AircraftInputs['flightCategory'] })}>
+                <option value="A">A: precision (non-terminal)</option>
+                <option value="B">B: cruise, climb, descent</option>
+                <option value="C">C: take-off, approach, landing</option>
+              </select>
+            </label>
           </Section>
         )}
       </div>

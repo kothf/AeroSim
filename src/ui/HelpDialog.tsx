@@ -131,7 +131,7 @@ const SECTIONS: Section[] = [
           <li><b className="c-warn">! Marginal</b>: 0–5% MAC. The layout turns amber and a banner suggests a CG position for a 5% margin.</li>
           <li><b className="c-crit">✕ Unstable</b>: CG aft of NP. C_mα becomes positive, the C_m–α line slopes upward, a real pole enters the right half of the s-plane and the layout turns red.</li>
         </ul>
-        <p>The handling badge (All coefficients tab, Maneuver column) shows whether stick force per g is inside the 13–125 N/g band, too light, too heavy, or reversed.</p>
+        <p>The handling badge (All coefficients tab, Maneuver column) shows whether stick force per g is inside the MIL-F-8785C Level 1 band for the limit load factor (for example 33–89 N/g at 3.8 g), too light, too heavy, or reversed. The Handling qualities tab grades the short period (ζ, CAP, ω_n), the phugoid and the stick forces, checks 14 CFR 23.155 and 23.173, and gives the CG envelope, stall speed and best-L/D speeds.</p>
       </>
     ),
   },
@@ -202,7 +202,7 @@ const SECTIONS: Section[] = [
         <p>Steady symmetric pull-up at load factor n. The extra lift and the pitch rate q = (n − 1)g/u₀ give, per g:</p>
         <F>dδe/dn = −(C_mα C_W + C_Lα C_mq ĝ) / (C_Lα C_mδe − C_Lδe C_mα),   ĝ = g c̄ / (2u₀²)</F>
         <p>Hinge moment C_h = C_h0 + C_hα α_t + C_hδ δe. Stick force F_s = G · η · q · S_e · c_e · C_h (positive = pull), where G is the stick gearing. The stick force per g follows from dC_h/dn.</p>
-        <p>Handling indicators: 13–125 N/g (≈ 3–28 lbf/g) acceptable band, and the force needed to reach the limit load factor compared with 267 N (60 lbf, 14 CFR 23.143(c), centre stick, temporary). The 1 g force is assumed trimmed out with a tab.</p>
+        <p>Handling indicators: the MIL-F-8785C table V centre-stick band (Level 1: at least 21/(n_L − 1) lbf/g, not below 3; at most 240/(n/α) lbf/g, capped at 28 and not below 56/(n_L − 1)), the 14 CFR 23.155 minimum force at the limit load factor (W/140, 15–35 lbf), and the force needed to reach the limit load factor compared with 267 N (60 lbf, 14 CFR 23.143(c), centre stick, temporary). The 1 g force is assumed trimmed out with a tab.</p>
       </>
     ),
   },

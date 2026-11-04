@@ -16,7 +16,11 @@ import { classifyModes, LongitudinalModes, shortPeriodApprox, phugoidApprox, Mod
 import { NacaProfile, parseNaca } from './naca';
 import { SectionAero, flapEffectiveness, solveThinAirfoil } from './thinAirfoil';
 import { downwashGradient, liftSlope3D } from './wing';
-import { Propulsion, propulsion } from './propulsion';
+import { Propulsion, propulsion, thrustAvailableAt } from './propulsion';
+import {
+  FlightCategory, Level, MIN_SPEED_STABILITY_GRADIENT, capLevel, minManeuverForce, phugoidLevel, spDampingLevel,
+  spFrequencyLevel, stickForcePerGBand, stickForcePerGLevel, worst,
+} from './criteria';
 
 /** Pitch-damping fuselage allowance: Nelson suggests ~10% over the tail-only estimate. */
 export const CMQ_FUSELAGE_FACTOR = 1.1;
@@ -48,6 +52,10 @@ export interface AeroDerivatives {
   CLa: number; // whole aircraft
   deda: number;
   eps0: number; // downwash at alpha = 0 [rad]
+  /** wing zero-lift angle relative to the fuselage reference line: alpha0_w - i_w [rad] */
+  alpha0Body: number;
+  /** wing-alone lift at alpha = 0 (fuselage reference) */
+  CLw0: number;
   tau: number; // elevator effectiveness
   CL0: number; // whole aircraft at alpha = 0, delta_e = 0
   /** total Cm at alpha = 0, delta_e = 0, including the trim thrust-line moment */
@@ -103,7 +111,19 @@ export interface Maneuver {
   stickForceTrim: number;
   chPerG: number;
   limitLoadFactor: number;
-  handling: { status: 'too-light' | 'ok' | 'too-heavy' | 'reversed'; min: number; max: number; forceAtLimit: number; forceLimit: number };
+  /** load factor per unit angle of attack n/alpha [g/rad] */
+  nAlpha: number;
+  handling: {
+    status: 'too-light' | 'ok' | 'too-heavy' | 'reversed';
+    /** MIL-F-8785C Level 1 stick force per g band [N/g] for this limit load factor and n/alpha */
+    min: number;
+    max: number;
+    forceAtLimit: number;
+    /** temporary force limit, 14 CFR 23.143(c) [N] */
+    forceLimit: number;
+    /** minimum force to reach the limit load factor, 14 CFR 23.155 [N] */
+    forceRequired: number;
+  };
 }
 
 export interface FlightState {
@@ -154,11 +174,15 @@ export interface AnalysisResult {
   man: Maneuver;
   prop: Propulsion;
   points: ReferencePoints;
+  hq: HandlingQualities;
 }
 
 export type AnalysisError = { ok: false; field: 'wingNaca' | 'tailNaca'; error: string };
 
-/** Handling-quality band for stick force per g (approximate, class I centre-stick/wheel). */
+/**
+ * Absolute bounds of the MIL-F-8785C Level 1 centre-stick band (3 and 28 lbf/g). The band actually applied
+ * depends on the limit load factor and n/alpha (criteria.ts stickForcePerGBand).
+ */
 export const STICK_FORCE_PER_G_MIN = 13; // N/g  (~3 lbf/g)
 export const STICK_FORCE_PER_G_MAX = 125; // N/g (~28 lbf/g)
 /**
@@ -201,7 +225,9 @@ export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: 
   const CLaWing = liftSlope3D(wing.clAlpha, inp.aspectRatio, sweep, mach, inp.liftSlopeMethod);
   const CLaTail = liftSlope3D(tail.clAlpha, inp.tailAspectRatio, 0, mach, inp.liftSlopeMethod);
   const deda = downwashGradient(CLaWing, inp.aspectRatio);
-  const eps0 = -deda * wing.alpha0; // eps = deda * (alpha - alpha0_w)
+  // alpha is the fuselage (body x axis) angle of attack; the wing sees alpha + i_w
+  const alpha0Body = wing.alpha0 - inp.wingIncidenceDeg * DEG;
+  const eps0 = -deda * alpha0Body; // eps = deda * (alpha + i_w - alpha0_w)
   const tau = flapEffectiveness(inp.elevatorChordRatio);
   const eta = inp.tailEfficiency;
   const St_S = geo.tailArea / inp.wingArea;
@@ -211,7 +237,7 @@ export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: 
 
   // Tail angle of attack at alpha = 0, delta_e = 0 (measured from tail zero-lift line)
   const alphaT0 = it - eps0 - tail.alpha0;
-  const CLw0 = -CLaWing * wing.alpha0;
+  const CLw0 = -CLaWing * alpha0Body;
   const CLt0 = CLaTail * alphaT0;
   const CL0 = CLw0 + eta * St_S * CLt0;
   const CLa = CLaWing + eta * St_S * CLaTail * (1 - deda);
@@ -224,7 +250,7 @@ export function aeroDerivatives(inp: AircraftInputs, wingP: NacaProfile, tailP: 
   const ltc = inp.tailArm / geo.mac;
   const Cmq = -2 * CMQ_FUSELAGE_FACTOR * eta * CLaTail * Vh * ltc;
   const Cmadot = -2 * eta * CLaTail * Vh * ltc * deda;
-  return { wing, tail, CLaWing, CLaTail, CLa, deda, eps0, tau, CL0, Cm0, Cm0Aero, CmT, Cma, CLde, Cmde, Cmq, Cmadot, xac };
+  return { wing, tail, CLaWing, CLaTail, CLa, deda, eps0, alpha0Body, CLw0, tau, CL0, Cm0, Cm0Aero, CmT, Cma, CLde, Cmde, Cmq, Cmadot, xac };
 }
 
 /** Total pitching moment and lift coefficients at (alpha, delta_e) [rad]. */
@@ -318,15 +344,17 @@ export function maneuver(inp: AircraftInputs, a: AeroDerivatives, f: FlightState
   const hingeScale = inp.stickGearing * inp.tailEfficiency * qbar * geo.elevatorArea * geo.elevatorChord;
   const stickForcePerG = hingeScale * chPerG;
   const chTrim = inp.ch0 + inp.chAlpha * st.trim.alphaTail + inp.chDelta * st.trim.deltaE;
-  const stickForceTrim = hingeScale * chTrim;
+  // the down-spring pushes the stick forward, so the pilot (or the tab) must hold an equal pull
+  const stickForceTrim = hingeScale * chTrim + (inp.downSpringN ?? 0);
   // Pull force needed to reach n_limit from trimmed 1 g flight (trim tab assumed to null the 1 g force)
   const forceAtLimit = stickForcePerG * (inp.limitLoadFactor - 1);
-  const status =
-    stickForcePerG <= 0 ? 'reversed' : stickForcePerG < STICK_FORCE_PER_G_MIN ? 'too-light' : stickForcePerG > STICK_FORCE_PER_G_MAX ? 'too-heavy' : 'ok';
+  const nAlpha = (a.CLa * qbar * inp.wingArea) / f.weight;
+  const band = stickForcePerGBand(inp.limitLoadFactor, nAlpha, 1);
+  const status = stickForcePerG <= 0 ? 'reversed' : stickForcePerG < band.min ? 'too-light' : stickForcePerG > band.max ? 'too-heavy' : 'ok';
   return {
     deltaEPerG, alphaPerG, xmp, maneuverMargin: xmp - inp.xcg, stickForcePerG, stickForceTrim, chPerG,
-    limitLoadFactor: inp.limitLoadFactor,
-    handling: { status, min: STICK_FORCE_PER_G_MIN, max: STICK_FORCE_PER_G_MAX, forceAtLimit, forceLimit: STICK_FORCE_LIMIT },
+    limitLoadFactor: inp.limitLoadFactor, nAlpha,
+    handling: { status, min: band.min, max: band.max, forceAtLimit, forceLimit: STICK_FORCE_LIMIT, forceRequired: minManeuverForce(f.weight) },
   };
 }
 
@@ -334,7 +362,7 @@ export function referencePoints(inp: AircraftInputs, geo: Geometry, a: AeroDeriv
   const c = geo.mac;
   const at = (x: number) => geo.macLe + x * c;
   // Wing alone: C_m,ac about the AC, so x_cp = x_ac - C_m,ac / C_L,w
-  const CLwTrim = a.CLaWing * (st.trim.alpha - a.wing.alpha0);
+  const CLwTrim = a.CLaWing * (st.trim.alpha - a.alpha0Body);
   const cpWing = Math.abs(CLwTrim) > 0.02 ? inp.xacWing - a.wing.cmC4 / CLwTrim : null;
   // Whole aircraft: trimmed, so the aerodynamic moment about the CG balances the thrust moment C_m,T
   const CL = st.trim.CL;
@@ -370,7 +398,8 @@ export function analyze(raw: AircraftInputs): { ok: true; result: AnalysisResult
   const ss = stateSpace(inputs, aero, flight, geo, flight.CW, prop.dTdu);
   const man = maneuver(inputs, aero, flight, geo, stat);
   const points = referencePoints(inputs, geo, aero, stat);
-  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man, prop, points } };
+  const hq = handlingQualities(inputs, geo, flight, aero, stat, ss, man, speedStabilityGradient(inputs, w.profile, t.profile, geo, prop));
+  return { ok: true, result: { inputs, wingProfile: w.profile, tailProfile: t.profile, geometry: geo, flight, aero, stat, ss, man, prop, points, hq } };
 }
 
 /** Root locus of the longitudinal poles as the CG is swept across the MAC. */
@@ -390,4 +419,144 @@ export function cgRootLocus(inp: AircraftInputs, from = 0.05, to = 0.6, steps = 
     out.push({ xcg, roots: stateSpace(ii, a, f, geo, f.CW, prop.dTdu).eigenvalues });
   }
   return out;
+}
+
+/** Elevator travel limit used for trim feasibility and the forward CG limit [rad] (trailing edge up). */
+export const ELEVATOR_UP_LIMIT = -25 * DEG;
+
+export interface Criterion {
+  value: number;
+  level: Level;
+}
+
+export interface HandlingQualities {
+  category: FlightCategory;
+  /** n/alpha [g/rad] and control anticipation parameter omega_sp^2 / (n/alpha) [1/(g s^2)] */
+  nAlpha: number;
+  spDamping: Criterion;
+  cap: Criterion;
+  spFrequency: Criterion;
+  phugoid: Criterion & { tDouble: number | null };
+  /** stick force per g against the MIL-F-8785C bands (Level 1 band in min/max) */
+  stickForcePerG: Criterion & { min: number; max: number };
+  /** 14 CFR 23.155: pull to reach the limit load factor from trimmed 1 g [N] */
+  maneuverForce: { value: number; required: number; pass: boolean };
+  /** 14 CFR 23.173(c): stable stick-force/speed gradient around the trim speed, tab trimmed [N/kt] (> 0 = stable) */
+  speedStability: { value: number; required: number; pass: boolean };
+  /** worst MIL-F-8785C level of the dynamic and stick-force criteria */
+  level: Level;
+  /** stick-free maneuver point: CG where the stick force per g vanishes [fraction MAC] (null if not found) */
+  xmpFree: number | null;
+  /** CG envelope [fraction MAC]: forward limit from elevator authority at C_L,max (free air, power off), aft limit
+   *  from 5% stick-free static margin and the minimum Level 1 stick force per g */
+  cgLimits: { forward: number | null; aftStickFree: number; aftForce: number | null; aft: number };
+  stall: { CLmax: number; vStall: number; speedRatio: number; clRatio: number; status: 'ok' | 'low-margin' | 'stalled' };
+  performance: { LDmax: number; CLbestLD: number; vBestLD: number; vMinPower: number; LD: number };
+}
+
+function shiftCg(a: AeroDerivatives, inp: AircraftInputs, xcg: number): AeroDerivatives {
+  const dx = xcg - inp.xcg;
+  return { ...a, Cm0: a.Cm0 + a.CLw0 * dx, Cm0Aero: a.Cm0Aero + a.CLw0 * dx, Cma: a.Cma + a.CLaWing * dx };
+}
+
+function bisect(fn: (x: number) => number, lo: number, hi: number, iters = 50): number | null {
+  let flo = fn(lo);
+  const fhi = fn(hi);
+  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) return null;
+  for (let i = 0; i < iters; i++) {
+    const m = 0.5 * (lo + hi);
+    const fm = fn(m);
+    if (fm * flo > 0) { lo = m; flo = fm; } else hi = m;
+  }
+  return 0.5 * (lo + hi);
+}
+
+/**
+ * 14 CFR 23.173 stick-free speed stability: with the tab set for zero stick force at the trim speed and the
+ * throttle held, the stick force at V0 -/+ 5 kt (re-trimmed alpha and delta_e, thrust-line moment at the fixed
+ * throttle). A down-spring pushes the stick forward with a constant force that the tab must cancel with a hinge moment growing with q, so it
+ * steepens the gradient by about 2 F_spring / V0. Returns the average gradient [N/kt], positive when a pull is needed to fly slower (stable).
+ */
+export function speedStabilityGradient(inp: AircraftInputs, wingP: NacaProfile, tailP: NacaProfile, geo: Geometry, prop: Propulsion): number {
+  const dV = 5;
+  const force = (kts: number, chTab: number) => {
+    const ii = { ...inp, speedKts: kts };
+    const f = flightState(ii);
+    const T = prop.throttle * thrustAvailableAt(ii, f.atm.density / 1.225, f.u0);
+    const CmT = (T * inp.thrustLineZ) / (f.qbar * inp.wingArea * geo.mac);
+    const a = aeroDerivatives(ii, wingP, tailP, geo, f.mach, CmT);
+    const st = staticStability(ii, a, f);
+    const ch = inp.chAlpha * st.trim.alphaTail + inp.chDelta * st.trim.deltaE;
+    const K = inp.stickGearing * inp.tailEfficiency * f.qbar * geo.elevatorArea * geo.elevatorChord;
+    return { F: K * (ch - chTab) + inp.downSpringN, ch, K };
+  };
+  const t0 = force(inp.speedKts, 0);
+  // the tab nulls the elevator hinge moment and the down-spring push together at the trim speed
+  const chTab = t0.ch + inp.downSpringN / t0.K;
+  return (force(inp.speedKts - dV, chTab).F - force(inp.speedKts + dV, chTab).F) / (2 * dV);
+}
+
+/** Handling-quality levels, certification-style force checks, CG envelope, stall and best-L/D speeds. */
+export function handlingQualities(
+  inp: AircraftInputs, geo: Geometry, f: FlightState, a: AeroDerivatives, st: StaticStability, ss: StateSpace, man: Maneuver,
+  gradient: number,
+): HandlingQualities {
+  const cat = inp.flightCategory ?? 'B';
+  const sp = ss.modes.shortPeriod;
+  const ph = ss.modes.phugoid;
+  const nAlpha = man.nAlpha;
+  const cap = (sp.wn * sp.wn) / nAlpha;
+  const nL = inp.limitLoadFactor;
+  const fsLevel = man.stickForcePerG > 0 ? stickForcePerGLevel(man.stickForcePerG, nL, nAlpha) : 4;
+  const spDamping = { value: sp.zeta, level: sp.stable ? spDampingLevel(sp.zeta, cat) : 4 } as Criterion;
+  const capC = { value: cap, level: sp.stable ? capLevel(cap, cat) : 4 } as Criterion;
+  const spFrequency = { value: sp.wn, level: sp.stable ? spFrequencyLevel(sp.wn, cat) : 4 } as Criterion;
+  const phugoid = { value: ph.zeta, tDouble: ph.tDouble, level: phugoidLevel(ph.stable, ph.kind === 'oscillatory', ph.zeta, ph.tDouble) };
+
+  // CG where the stick force per g has a given value (the per-g force does not depend on the trim state)
+  const fsAt = (x: number) => maneuver({ ...inp, xcg: x }, shiftCg(a, inp, x), f, geo, st).stickForcePerG;
+  const xmpFree = bisect(fsAt, inp.xcg - 2, inp.xcg + 2);
+  const band = stickForcePerGBand(nL, nAlpha, 1);
+  const aftForce = bisect((x) => fsAt(x) - band.min, inp.xcg - 2, xmpFree ?? inp.xcg + 2);
+  // Forward CG: trim at C_L,max needs full up elevator (aerodynamic moment only, no thrust)
+  const deAtClMax = (x: number) => {
+    const ax = shiftCg(a, inp, x);
+    return solve2(ax.CLa, ax.CLde, ax.Cma, ax.Cmde, inp.clMax - ax.CL0, -ax.Cm0Aero)[1] - ELEVATOR_UP_LIMIT;
+  };
+  const forward = bisect(deAtClMax, st.xnp - 3, st.xnp - 1e-3);
+  const aftStickFree = st.xnpFree - 0.05;
+  const aft = aftForce === null ? aftStickFree : Math.min(aftStickFree, aftForce);
+
+  // Stall and drag polar
+  const rho = f.atm.density;
+  const W = f.weight * Math.cos(inp.flightPathDeg * DEG);
+  const vStall = Math.sqrt((2 * W) / (rho * inp.wingArea * inp.clMax));
+  const speedRatio = f.u0 / vStall;
+  const clRatio = f.CW / inp.clMax;
+  const k = 1 / (Math.PI * inp.oswald * inp.aspectRatio);
+  const CLbestLD = Math.sqrt(inp.cd0 / k);
+  const vAt = (CL: number) => Math.sqrt((2 * W) / (rho * inp.wingArea * CL));
+
+  return {
+    category: cat,
+    nAlpha,
+    spDamping,
+    cap: capC,
+    spFrequency,
+    phugoid,
+    stickForcePerG: { value: man.stickForcePerG, level: fsLevel, min: band.min, max: band.max },
+    maneuverForce: { value: man.handling.forceAtLimit, required: man.handling.forceRequired, pass: man.handling.forceAtLimit >= man.handling.forceRequired },
+    speedStability: { value: gradient, required: MIN_SPEED_STABILITY_GRADIENT, pass: gradient >= MIN_SPEED_STABILITY_GRADIENT },
+    level: worst(spDamping.level, capC.level, spFrequency.level, phugoid.level, fsLevel),
+    xmpFree,
+    cgLimits: { forward, aftStickFree, aftForce, aft },
+    stall: { CLmax: inp.clMax, vStall, speedRatio, clRatio, status: clRatio > 1 ? 'stalled' : speedRatio < 1.3 ? 'low-margin' : 'ok' },
+    performance: {
+      LDmax: 1 / (2 * Math.sqrt(inp.cd0 * k)),
+      CLbestLD,
+      vBestLD: vAt(CLbestLD),
+      vMinPower: vAt(Math.sqrt(3) * CLbestLD),
+      LD: f.CW / (inp.cd0 + k * f.CW * f.CW),
+    },
+  };
 }

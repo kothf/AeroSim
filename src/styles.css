@@ -459,3 +459,17 @@ h1 .version { display: inline-block; margin-left: 6px; padding: 1px 7px; border-
   .inspector { position: static; height: auto; border-left: 0; border-top: 1px solid var(--border); }
   .editor-hint { display: none; }
 }
+
+/* Handling qualities tab */
+.gauge-mk.mk-lim { color: var(--text-2); top: 30px; } .gauge-mk.mk-lim::after { top: -16px; height: 16px; }
+.hq { display: grid; gap: 12px; padding: 4px 2px; }
+.hq-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.hq-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.hq-table th { text-align: left; color: var(--text-2); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.hq-table td { padding: 5px 6px; border-bottom: 1px dashed var(--grid); vertical-align: middle; }
+.hq-table td.num { font-family: var(--mono); white-space: nowrap; }
+.hq .badge.hq-level { font-size: 11.5px; white-space: nowrap; }
+.hq-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; }
+.hq-cols h3 { margin: 0 0 4px; font-size: 13px; }
+.hq-note { font-size: 11.5px; margin: 0; }
+@media (max-width: 640px) { .hq-table { font-size: 11.5px; } .hq-table th:nth-child(2), .hq-table td:nth-child(2) { display: none; } }
